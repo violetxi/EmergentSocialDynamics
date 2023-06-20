@@ -1,3 +1,10 @@
-typeguard
 gym
+tqdm
+typeguard
 numpy-stl
+wandb
+torchrl
+# torchRL extra denpendencies
+pytest
+pyyaml
+pytest-instafail
