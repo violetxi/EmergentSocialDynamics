@@ -3,6 +3,7 @@ tqdm
 typeguard
 numpy-stl
 wandb
+pettingzoo[all]
 torchrl
 # torchRL extra denpendencies
 pytest
