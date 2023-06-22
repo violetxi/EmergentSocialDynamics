@@ -2,6 +2,8 @@ gym
 tqdm
 typeguard
 numpy-stl
+torch
+torchvision
 wandb
 pettingzoo[all]
 torchrl
@@ -9,3 +11,4 @@ torchrl
 pytest
 pyyaml
 pytest-instafail
+jupyter
