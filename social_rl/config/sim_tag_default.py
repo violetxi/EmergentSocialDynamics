@@ -1,21 +1,20 @@
 """ Default configuration for simple_tag_v3 environment.
 """
 from typeguard import typechecked
-from social_rl.env.PettingZoo import PettingZooBase
+from social_rl.env.ptz_mpe import PettingZooMPEBase
 
 @typechecked
 class EnvConfig:
     def __init__(self) -> None:
         self.env_name = "mpe"
         self.task_name = "simple_tag_v3"
-        self.env_class = PettingZooBase
+        self.env_class = PettingZooMPEBase
         self.env_kwargs = dict(
             num_good=4, 
             num_adversaries=4,
             num_obstacles=3, 
             max_cycles=25, 
-            continuous_actions=False,
-            #render_mode='rgb_array'
+            continuous_actions=False
         )
 
 class WmConfig:
