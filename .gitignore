@@ -123,10 +123,11 @@ celerybeat.pid
 .env
 .venv
 venv/
+env/
+venv_srl/
 ENV/
 env.bak/
 venv.bak/
-srl/    # venv folder on my Mac
 
 # Spyder project settings
 .spyderproject
