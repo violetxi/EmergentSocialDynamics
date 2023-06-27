@@ -6,8 +6,7 @@ torch
 torchvision
 wandb
 pettingzoo[all]
-torchrl    # install the branch developed by me for MARL compatibility
-# torchRL extra denpendencies
+torchrl
 pytest
 pyyaml
 pytest-instafail
