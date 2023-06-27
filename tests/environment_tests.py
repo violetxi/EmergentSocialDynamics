@@ -21,7 +21,7 @@ def test_env_rollout(env: _EnvWrapper):
         rollout_length,
         auto_reset=True)
     for i, rollout in enumerate(rollouts):
-        print(f"Rollout {i}")
+        print(f"Testing rollout {i}")
         if i < rollout_length - 1:
             obs_next = rollout['next']['observation']
             obs_plus_one = rollouts[i+1]['observation']
