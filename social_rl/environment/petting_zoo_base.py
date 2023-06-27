@@ -131,13 +131,7 @@ class PettingZooMPEBase(_EnvWrapper):
         )        
         if not isinstance(observation_spec, CompositeSpec):
             observation_spec = CompositeSpec(observation=observation_spec)
-        self.observation_spec = observation_spec
-        
-        # MA envs reward spaces will be a dict of {agent: reward_space, ...}
-        # reward_spaces = {agent: UnboundedContinuousTensorSpec(
-        #     shape=[1],
-        #     device=self.device,
-        #     ) for agent in env.possible_agents}
+        self.observation_spec = observation_spec        
         reward_spaces = {
             agent: 
             gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32) 
