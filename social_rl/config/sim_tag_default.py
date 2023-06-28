@@ -1,7 +1,10 @@
 """ Default configuration for simple_tag_v3 environment.
 """
+import torch.nn as nn
 from typeguard import typechecked
+
 from social_rl.environment.petting_zoo_base import PettingZooMPEBase
+
 
 @typechecked
 class EnvConfig:
@@ -17,9 +20,35 @@ class EnvConfig:
             continuous_actions=False
         )
 
+
 class WmConfig:
     def __init__(self) -> None:
-        pass  # fill in with your parameters
+        self.backbone_kwargs = dict(
+            out_features=128,
+            num_cells=[128, 128],
+            activation_class=nn.ReLU,
+            dropout=0.2,
+            layer_class=nn.LazyLinear,
+            device="cpu",
+        )
+        self.obs_head_kwargs = dict(
+            in_features=128,
+            out_features=32,
+            num_cells=[128, 128],
+            activation_class=nn.ReLU,
+            dropout=0.2,
+            layer_class=nn.Linear,
+            device="cpu",
+        )
+        self.action_head_kwargs = dict(
+            in_features=128,
+            out_features=5,
+            num_cells=[128, 128],
+            activation_class=nn.ReLU,
+            dropout=0.2,
+            layer_class=nn.Linear,
+            device="cpu",
+        )
 
 
 class PolicyConfig:
