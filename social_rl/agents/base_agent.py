@@ -9,6 +9,8 @@ from tensordict import TensorDict
 from tensordict.nn import TensorDictModule, TensorDictSequential
 from torchrl.data import TensorDictReplayBuffer
 
+from social_rl.config.base_config import BaseConfig
+
 
 @typechecked
 class BaseAgent(ABC):
@@ -47,6 +49,14 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
+    def prep_optimization(seslf) -> None:
+        """Each agent gets its own loss criterion and optimizer for world model 
+        and policy network        
+        """
+        raise NotImplementedError
+    
+
+    @abstractmethod
     def act(self, tensordict: TensorDict) -> Tensor:        
         """Output action given observation based on agent's policy
         args:
@@ -70,4 +80,3 @@ class BaseAgent(ABC):
         """
         raise NotImplementedError
 
-    

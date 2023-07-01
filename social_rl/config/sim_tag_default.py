@@ -11,6 +11,7 @@ from torchrl.data import TensorDictReplayBuffer, LazyMemmapStorage
 
 from social_rl.models.cores import MLPModule
 from social_rl.config.base_config import BaseConfig
+from social_rl.models.wm_nets.mlp_dynamics_model import MLPDynamicsModel
 from social_rl.environment.petting_zoo_base import PettingZooMPEBase
 
 
@@ -60,6 +61,7 @@ class WmConfig(BaseConfig):
             layer_class=nn.Linear,
             device="cpu",
         )
+        self.wm_net_cls =  MLPDynamicsModel
 
 
 @typechecked
