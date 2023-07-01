@@ -11,19 +11,21 @@ from tensordict.tensordict import TensorDictBase
 from torchrl.envs.common import _EnvWrapper
 from torchrl.data.tensor_specs import CompositeSpec, UnboundedContinuousTensorSpec
 
+from social_rl.config.base_config import BaseConfig
 from social_rl.utils.utils import gym_to_torchrl_spec_transform
 
 
 @typechecked
 class PettingZooMPEBase(_EnvWrapper):
-    def __init__(self,seed: int, config: Callable, **kwargs) -> None:
+    def __init__(self,seed: int, config: BaseConfig, **kwargs) -> None:
         """
         Args:
             seed: random seed
             config: config object (need to be a callable, e.g. class Config)
         """        
         self.seed = seed
-        self.config = config().env_config
+        #self.config = config().env_config
+        self.config = config
         self.kwargs = kwargs
         super().__init__(**kwargs)
 
@@ -112,7 +114,6 @@ class PettingZooMPEBase(_EnvWrapper):
         return tensordict_out
     
 
-    # @TODO: implement in MPEEnv class
     def _make_specs(self, env: ParallelEnv) -> None:
         self.categorical_action_encoding = not env.aec_env.env.env.continuous_actions     
         action_spaces = {agent : env.action_space(agent) for agent in env.possible_agents}

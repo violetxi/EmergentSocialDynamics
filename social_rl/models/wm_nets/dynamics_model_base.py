@@ -19,7 +19,7 @@ class ForwardDynamicsModelBase(nn.Module, ABC):
         super().__init__()
         self.backbone = backbone
         self.obs_head = obs_head
-        self.action_head = action_head    
+        self.action_head = action_head
     
     @abstractmethod
     def forward_obs_head(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
@@ -36,3 +36,4 @@ class ForwardDynamicsModelBase(nn.Module, ABC):
     @abstractmethod
     def forward_rollout(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
+        

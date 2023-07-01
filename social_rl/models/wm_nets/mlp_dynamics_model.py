@@ -5,22 +5,8 @@ from typeguard import typechecked
 import torch
 from torch import nn
 from torchrl.modules.models import MLP
-from social_rl.world_model.dynamics_model_base import ForwardDynamicsModelBase
-
-
-
-@typechecked
-class MLPModule(nn.Module):
-    def __init__(self, **kwargs: Dict) -> None:
-        """MLP module for world model
-        kwargs: should be instantiated in config file
-        """
-        super().__init__()        
-        self.model = MLP(**kwargs)
-
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+from social_rl.models.cores import MLPModule
+from social_rl.models.wm_nets.dynamics_model_base import ForwardDynamicsModelBase
 
 
 
@@ -33,10 +19,11 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
     """    
     def __init__(self, agent_idx: int, config: Callable) -> None:
         self.agent_idx = agent_idx
-        self.config = config
-        backbone = MLPModule(**self.config.backbone_kwargs)
-        obs_head = MLPModule(**self.config.obs_head_kwargs)
-        action_head = MLPModule(**self.config.action_head_kwargs)
+        cfg = config()
+        self.config = cfg.wm_config        
+        backbone = MLPModule(self.config.backbone_kwargs)
+        obs_head = MLPModule(self.config.obs_head_kwargs)
+        action_head = MLPModule(self.config.action_head_kwargs)
         super().__init__(backbone, obs_head, action_head)
 
 
@@ -139,4 +126,9 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         loss_dict['loss'] = loss
         return loss_dict
 
+
+if __name__ == "__main__":
+    
+    model = MLPDynamicsModel(0, None)
+    print(f"MLPDynamicsModel is tensordict compatible: {is_tensordict_compatible(model)}")
 

@@ -1,4 +1,6 @@
 import os
+import json
+import argparse
 from typeguard import typechecked
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -124,3 +126,18 @@ def gym_to_torchrl_spec_transform(
         raise NotImplementedError(
             f"spec of type {type(spec).__name__} is currently unaccounted for"
         )
+    
+
+@typechecked
+def save_args(args: argparse.Namespace, file_path: str):
+    """Save args to a json file for reproducibility
+    """
+    with open(file_path, 'w') as f:
+        json.dump(vars(args), f)
+
+
+@typechecked
+def load_args(file_path: str) -> argparse.Namespace:
+    with open(file_path, 'r') as f:
+        args = json.load(f)
+    return argparse.Namespace(**args)
