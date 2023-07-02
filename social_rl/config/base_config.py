@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 
 @typechecked
-class BaseConfig(metaclass=ABC):
+class BaseConfig(ABC):
     @abstractmethod
     def __init__(self) -> None:
         pass

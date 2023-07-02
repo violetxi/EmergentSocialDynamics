@@ -18,9 +18,12 @@ from torchrl.data.tensor_specs import (
 )
 from torchrl.data.utils import numpy_to_torch_dtype_dict
 
+from social_rl.config.base_config import BaseConfig
+
+
 
 @typechecked
-def load_config_from_path(path: str) -> Any:
+def load_config_from_path(path: str, args: argparse.Namespace) -> BaseConfig:
     """
     Load config from path, assuming config is a python file with class Config,  
     and all parameters are defined as class attributes
@@ -29,8 +32,16 @@ def load_config_from_path(path: str) -> Any:
     config_name = os.path.basename(path).split('.')[0]
     config_path = base_lib_path + config_name
     config = __import__(config_path, fromlist=['*'])
-    return config.Config()
+    return config.Config(args)
     
+
+@typechecked
+def ensure_dir(directory: str) -> None:
+    if not os.path.exists(directory):
+        print(f"Creating directory {directory}")
+        os.makedirs(directory)
+
+
 
 @typechecked
 def gym_to_torchrl_spec_transform(

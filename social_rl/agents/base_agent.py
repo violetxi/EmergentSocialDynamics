@@ -1,15 +1,14 @@
 """Abstract base class for all agents
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Callable, Optional, Tuple, Union, List
+from typing import Dict, Any
 from typeguard import typechecked
 
-from torch import Tensor
+from torch import Tensor, nn
 from tensordict import TensorDict
-from tensordict.nn import TensorDictModule, TensorDictSequential
+from tensordict.nn import TensorDictModule
 from torchrl.data import TensorDictReplayBuffer
 
-from social_rl.config.base_config import BaseConfig
 
 
 @typechecked
@@ -21,7 +20,7 @@ class BaseAgent(ABC):
             policy: TensorDictModule,    # policy network
             value: TensorDictModule,     # value network
             qvalue: TensorDictModule,    # qvalue network
-            world_model: TensorDictModule,   # world model
+            world_model: nn.Module, #TensorDictModule,   # world model
             replay_buffer_wm: TensorDictReplayBuffer,     # replay buffer
             replay_buffer_policy: TensorDictReplayBuffer,     # replay buffer
         ) -> None:

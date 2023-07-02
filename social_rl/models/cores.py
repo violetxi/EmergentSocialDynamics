@@ -9,7 +9,7 @@ from torchrl.modules.models import MLP
 
 @typechecked
 class MLPModule(nn.Module):
-    def __init__(self, **kwargs: Dict) -> None:
+    def __init__(self, kwargs: Dict) -> None:
         """MLP module for world model
         kwargs: should be instantiated in config file
         """

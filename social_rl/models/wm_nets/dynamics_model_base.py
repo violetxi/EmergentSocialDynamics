@@ -1,6 +1,5 @@
 """Base classes for dynamics models of the world and other agents.
 """
-from typing import Callable, Dict
 from typeguard import typechecked
 from abc import ABC, abstractmethod
 

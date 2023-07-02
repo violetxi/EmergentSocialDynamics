@@ -13,7 +13,10 @@ from torchrl.modules.tensordict_module.actors import ValueOperator
 
 from social_rl.agents.base_agent import BaseAgent
 from social_rl.config.base_config import BaseConfig
-from social_rl.utils.utils import load_config_from_path
+from social_rl.utils.utils import (
+    load_config_from_path,
+    ensure_dir,
+)
 from social_rl.models.policy_nets.policy import TensorDictPolicyNet, TensorDictSequentialPolicyNet
 
 
@@ -75,7 +78,8 @@ def parse_args() -> argparse.Namespace:
 class Trainer:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
-        self.config = load_config_from_path(args.config_path)
+        ensure_dir(args.log_dir)
+        self.config = load_config_from_path(args.config_path, args)
         self._init_env(args.seed)
         self._init_agents()
         self._init_buffer()
@@ -91,28 +95,37 @@ class Trainer:
 
     def _init_agent(self, agent_idx: int, agent_id: str) -> BaseAgent:
         """Initialize each agent's world model, policy, value and qvalue networks
-        """
-        
+        """        
         policy_config = self.config.agent_config.policy_config
-        policy = policy_config.policy_class(agent_idx, policy_config)    
+        policy = policy_config.policy_class(policy_config)
 
         value_config = self.config.agent_config.value_config
-        value_module = value_config.value_net_class(value_config)
-        value = ValueOperator(value_module, in_keys=['obs'])    # outkeys defaults to state_value with obs as inkey        
+        value_module = value_config.net_module(value_config.net_kwargs)
+        # outkeys defaults to state_value with obs as inkey     
+        value = ValueOperator(value_module, in_keys=value_config.in_keys) 
 
         qvalue_config = self.config.agent_config.qvalue_config
-        qvalue_module = qvalue_config.qvalue_net_class(qvalue_config)
-        qvalue = ValueOperator(qvalue_module, in_keys=['obs', 'action'])    # outkeys defaults to state_action_value with obs as inkey
+        qvalue_module = qvalue_config.net_module(qvalue_config.net_kwargs)
+        # outkeys defaults to state_action_value with obs as inkey
+        qvalue = ValueOperator(qvalue_module, in_keys=value_config.in_keys)        
 
-        world_model_config = self.config.agent_config.world_model_config
-        world_model = world_model_config.wm_net_cls(world_model_config)        
+        wm_config = self.config.agent_config.wm_config
+        world_model = wm_config.wm_net_cls(agent_idx, wm_config)        
 
         replay_buffer_config = self.config.agent_config.replay_buffer_config        
         replay_buffer_wm = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
-        replay_buffer_policy = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
-
+        replay_buffer_policy = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)        
+        #breakpoint()
         agent = self.config.agent_config.agent_class(
-            agent_idx, policy, value, qvalue, world_model, replay_buffer_wm, replay_buffer_policy
+            agent_idx=agent_idx, 
+            agent_id=agent_id,
+            config=self.config.agent_config,
+            policy=policy,
+            value=value, 
+            qvalue=qvalue, 
+            world_model=world_model, 
+            replay_buffer_wm=replay_buffer_wm, 
+            replay_buffer_policy=replay_buffer_policy
         )
         print(f"Finished initializing {policy_config.policy_class.__name__} policy for {len(self.agents)} agents") 
         return agent
@@ -120,7 +133,7 @@ class Trainer:
 
     def _init_agents(self) -> None:
         agent_config = self.config.agent_config
-        agent_ids = self._env.agents    # get agent ids from env
+        agent_ids = self.env._env.agents    # get agent ids from env
         assert len(agent_ids) == agent_config.num_agents, \
             f"Number of agents in env ({len(agent_ids)}) does not match number of agents in config ({agent_config.num_agents})"
         
@@ -128,7 +141,7 @@ class Trainer:
         for agent_idx in range(agent_config.num_agents):
             agent_id = agent_ids[agent_idx]            
             agent = self._init_agent(agent_idx, agent_id)
-            self.agents[agent_id] = agent
+            self.agents[agent_id] = agent        
         print(f"Finished initializing {agent_config.num_agents} agents")
 
 
@@ -188,4 +201,5 @@ class Trainer:
 
 if __name__ == '__main__':
     args = parse_args()
-    trainer = Trainer(args)    
+    trainer = Trainer(args)
+    trainer.train()   

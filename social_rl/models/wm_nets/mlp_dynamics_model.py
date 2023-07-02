@@ -1,11 +1,11 @@
-from typing import Dict, Any, Callable, Optional, Tuple, Union, List
-from torch import nn
+from typing import Dict, Any, Optional, Tuple, Union, List
 from typeguard import typechecked
 
 import torch
-from torch import nn
 from torchrl.modules.models import MLP
+
 from social_rl.models.cores import MLPModule
+from social_rl.config.base_config import BaseConfig
 from social_rl.models.wm_nets.dynamics_model_base import ForwardDynamicsModelBase
 
 
@@ -17,10 +17,9 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
             agent_idx: index to help identify which obs and action tensor belong to this agent
             config: should be the callable config class
     """    
-    def __init__(self, agent_idx: int, config: Callable) -> None:
-        self.agent_idx = agent_idx
-        cfg = config()
-        self.config = cfg.wm_config        
+    def __init__(self, agent_idx: int, config: BaseConfig) -> None:
+        self.agent_idx = agent_idx        
+        self.config = config
         backbone = MLPModule(self.config.backbone_kwargs)
         obs_head = MLPModule(self.config.obs_head_kwargs)
         action_head = MLPModule(self.config.action_head_kwargs)

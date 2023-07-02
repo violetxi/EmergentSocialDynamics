@@ -1,14 +1,14 @@
 from tensordict import TensorDict
 from torch import Tensor
 from typeguard import typechecked
-from typing import Dict, Any, Callable, Optional, Tuple, Union, List
+from typing import Dict, Any
 
 import torch
-import torch.nn as nn
 from tensordict.nn import TensorDictModule
 from torchrl.data import TensorDictReplayBuffer
 from torchrl.objectives.sac import SACLoss
 
+from social_rl.config.base_config import BaseConfig
 from social_rl.agents.base_agent import BaseAgent
 
 
@@ -19,17 +19,19 @@ class VanillaAgent(BaseAgent):
     to maximize extrinsic reward while learning to predict next state and other agents' actions
     """
     def __init__(
-            self, 
+            self,            
             agent_idx: int, 
             agent_id: str, 
+            config: BaseConfig,
             policy: TensorDictModule, 
             value: TensorDictModule, 
             qvalue: TensorDictModule, 
-            world_model: TensorDictModule, 
+            world_model: torch.nn.Module, #TensorDictModule, 
             replay_buffer_wm: TensorDictReplayBuffer, 
             replay_buffer_policy: TensorDictReplayBuffer
         ) -> None:
         super().__init__(agent_idx, agent_id, policy, value, qvalue, world_model, replay_buffer_wm, replay_buffer_policy)
+        self.config = config
         self.prep_optimization()    # initialize loss criterion and optimizer for world model and policy network
 
 
