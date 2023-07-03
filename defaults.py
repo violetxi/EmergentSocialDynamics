@@ -7,7 +7,7 @@ DEFAULT_ARGS = {
     'epochs': 1e5,
     'num_episodes': 1e4,
     'episode_length': 1e4,
-    'warm_up_steps': 1e5,
+    'warm_up_steps': int(1e5),
     'val_freq': 100,
 }
 

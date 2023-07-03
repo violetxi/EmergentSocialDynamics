@@ -7,12 +7,21 @@ import argparse
 import torch.nn as nn
 from typeguard import typechecked
 
-from torchrl.data import TensorDictReplayBuffer, LazyMemmapStorage
+from torchrl.data import (
+    TensorDictReplayBuffer, 
+    LazyMemmapStorage
+)
+from torchrl.modules.tensordict_module.actors import (
+    Actor,
+    ValueOperator
+)
 
 from social_rl.models.cores import MLPModule
 from social_rl.config.base_config import BaseConfig
-from social_rl.models.policy_nets.policy import TensorDictPolicyNet, TensorDictSequentialPolicyNet
-from social_rl.models.wm_nets.mlp_dynamics_model import MLPDynamicsModel
+from social_rl.models.wm_nets.mlp_dynamics_model import (
+    MLPDynamicsModel,
+    MLPDynamicsTensorDictModel
+)
 from social_rl.environment.petting_zoo_base import PettingZooMPEBase
 from social_rl.agents.vanilla_agent import VanillaAgent
 
@@ -49,7 +58,8 @@ class EnvConfig(BaseConfig):
 
 
 @typechecked
-class PolicyConfig(BaseConfig):
+class ActorConfig(BaseConfig):
+    """ Configuration for the actor (policy) network. """
     def __init__(self) -> None:
         self.net_module = MLPModule
         self.net_kwargs = dict(
@@ -59,11 +69,11 @@ class PolicyConfig(BaseConfig):
             activation_class = nn.ReLU,
             dropout = 0.2,
             layer_class = nn.Linear
-    )
-        self.policy_cls_type = "dict"    # can be either TensorDictPolicy or TensorDictSequentialPolicy        
-        self.policy_class = TensorDictPolicyNet
+    )        
         self.in_keys = ["latent"]
-        self.out_keys = ["actions"] 
+        self.out_keys = ["action"] 
+        self.wrapper_class = Actor
+
 
 
 @typechecked
@@ -77,8 +87,9 @@ class ValueConfig(BaseConfig):
             activation_class = nn.ReLU,
             dropout = 0.2,
             layer_class = nn.Linear
-    )
+        )
         self.in_keys = ["obs"]
+        self.wrapper_class = ValueOperator
         
 
 
@@ -94,7 +105,8 @@ class QValueConfig(BaseConfig):
             dropout = 0.2,
             layer_class = nn.Linear
         )
-        in_keys = ['obs', 'action']
+        self.in_keys = ['obs', 'action']
+        self.wrapper_class = ValueOperator
 
 
 
@@ -127,7 +139,7 @@ class ReplayBufferConfig(BaseConfig):
 class WmConfig(BaseConfig):
     def __init__(self) -> None:
         self.backbone_kwargs = dict(
-            in_features=32,
+            #in_features=32,
             out_features=128,
             num_cells=[128, 128],
             activation_class=nn.ReLU,
@@ -153,7 +165,10 @@ class WmConfig(BaseConfig):
             layer_class=nn.Linear,
             device="cpu",
         )
-        self.wm_net_cls =  MLPDynamicsModel
+        self.wm_module_cls =  MLPDynamicsModel
+        self.in_keys = ["obs", "action", "past_actions", "next_actions", "next_obs"]
+        self.out_keys = ["latent", "loss_dict"]
+        self.wrapper_class = MLPDynamicsTensorDictModel
 
 
 
@@ -161,7 +176,7 @@ class WmConfig(BaseConfig):
 class AgentConfig(BaseConfig):
     def __init__(
             self,
-            policy_config: BaseConfig,
+            actor_config: BaseConfig,
             value_config: BaseConfig,
             qvalue_config: BaseConfig,
             wm_config: BaseConfig,
@@ -170,8 +185,8 @@ class AgentConfig(BaseConfig):
         self.num_good = 4
         self.num_adversaries = 4
         self.num_agents = self.num_good + self.num_adversaries
-        self.policy_config = policy_config
-        self.lr_policy = 1e-3
+        self.actor_config = actor_config
+        self.lr_actor = 1e-3
         self.value_config = value_config
         self.lr_value = 1e-3
         self.qvalue_config = qvalue_config
@@ -190,12 +205,12 @@ class Config(BaseConfig):
             args: argparse.Namespace) -> None:
         self.exp_config = ExpConfig(args)
         wm_config = WmConfig()
-        policy_config = PolicyConfig()
+        actor_config = ActorConfig()
         value_config = ValueConfig()
         qvalue_config = QValueConfig()
         replay_buffer_config = ReplayBufferConfig(self.exp_config)
         self.agent_config = AgentConfig(
-            policy_config,
+            actor_config,
             value_config,
             qvalue_config,
             wm_config,

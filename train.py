@@ -1,23 +1,17 @@
 """
 Trainer class and training loop are here
 """
-import os
-import json
 import argparse
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
 
 from tensordict import TensorDict
-from tensordict.nn import TensorDictModule
-from torchrl.modules.tensordict_module.actors import ValueOperator
 
 from social_rl.agents.base_agent import BaseAgent
-from social_rl.config.base_config import BaseConfig
 from social_rl.utils.utils import (
     load_config_from_path,
     ensure_dir,
 )
-from social_rl.models.policy_nets.policy import TensorDictPolicyNet, TensorDictSequentialPolicyNet
 
 
 
@@ -94,40 +88,60 @@ class Trainer:
 
 
     def _init_agent(self, agent_idx: int, agent_id: str) -> BaseAgent:
-        """Initialize each agent's world model, policy, value and qvalue networks
-        """        
-        policy_config = self.config.agent_config.policy_config
-        policy = policy_config.policy_class(policy_config)
+        """Initialize each agent's world model, actor, value and qvalue networks
+        args:
+            agent_idx: index of agent in env
+            agent_id: id of agent in env
+        """ 
+        actor_config = self.config.agent_config.actor_config
+        actor_module = actor_config.net_module(actor_config.net_kwargs)
+        action_spec = self.env.action_spec[agent_id]
+        actor = actor_config.wrapper_class(
+            module=actor_module, 
+            in_keys=actor_config.in_keys,
+            out_keys=actor_config.out_keys,
+            spec=action_spec,
+        )        
 
         value_config = self.config.agent_config.value_config
         value_module = value_config.net_module(value_config.net_kwargs)
         # outkeys defaults to state_value with obs as inkey     
-        value = ValueOperator(value_module, in_keys=value_config.in_keys) 
+        value = value_config.wrapper_class(
+            value_module, 
+            in_keys=value_config.in_keys) 
 
         qvalue_config = self.config.agent_config.qvalue_config
         qvalue_module = qvalue_config.net_module(qvalue_config.net_kwargs)
         # outkeys defaults to state_action_value with obs as inkey
-        qvalue = ValueOperator(qvalue_module, in_keys=value_config.in_keys)        
+        qvalue = value_config.wrapper_class(
+            qvalue_module, 
+            in_keys=value_config.in_keys)        
 
-        wm_config = self.config.agent_config.wm_config
-        world_model = wm_config.wm_net_cls(agent_idx, wm_config)        
+        obs_dim = self.env.observation_spec["observation"][agent_id].shape[0]
+        self.config.agent_config.wm_config.backbone_kwargs["in_features"] = obs_dim
+        wm_config = self.config.agent_config.wm_config                
+        wm_module = wm_config.wm_module_cls(agent_idx, wm_config)
+        world_model = wm_config.wrapper_class(
+            wm_module, 
+            wm_config.in_keys, 
+            wm_config.out_keys
+        )
 
         replay_buffer_config = self.config.agent_config.replay_buffer_config        
         replay_buffer_wm = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
-        replay_buffer_policy = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)        
-        #breakpoint()
+        replay_buffer_actor = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
         agent = self.config.agent_config.agent_class(
             agent_idx=agent_idx, 
             agent_id=agent_id,
             config=self.config.agent_config,
-            policy=policy,
+            actor=actor,
             value=value, 
             qvalue=qvalue, 
             world_model=world_model, 
             replay_buffer_wm=replay_buffer_wm, 
-            replay_buffer_policy=replay_buffer_policy
+            replay_buffer_actor=replay_buffer_actor
         )
-        print(f"Finished initializing {policy_config.policy_class.__name__} policy for {len(self.agents)} agents") 
+        print(f"Finished initializing {agent_id} with obs_dim {obs_dim}") 
         return agent
 
 
@@ -157,7 +171,7 @@ class Trainer:
             tensordict = self.env.step(actions)
             for agent_id, agent in self.agents.items():
                 agent.replay_buffer_wm.add(tensordict.clone())
-                agent.replay_buffer_policy.add(tensordict.clone())        
+                agent.replay_buffer_actor.add(tensordict.clone())        
 
 
     def _step_episode(self) -> TensorDict:
@@ -177,7 +191,7 @@ class Trainer:
             for _, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer_wm.add(tensordict.clone())
-                agent.replay_buffer_policy.add(tensordict.clone())
+                agent.replay_buffer_actor.add(tensordict.clone())
             
             if tensordict['done'].all():
                 break
@@ -186,9 +200,9 @@ class Trainer:
             for agent_id, agent in self.agents.items():
                 tensordict_wm = agent.replay_buffer_wm.sample()
                 wm_dict = agent.update_wm(tensordict_wm)
-                tensordict_policy = agent.replay_buffer_policy.sample()
-                policy_dict = agent.update_policy(tensordict_policy)
-                # log wm_dict and policy_dict
+                tensordict_actor = agent.replay_buffer_actor.sample()
+                actor_dict = agent.update_actor(tensordict_actor)
+                # log wm_dict and actor_dict
 
 
     def train(self) -> None:

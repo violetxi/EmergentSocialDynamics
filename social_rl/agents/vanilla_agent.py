@@ -23,32 +23,33 @@ class VanillaAgent(BaseAgent):
             agent_idx: int, 
             agent_id: str, 
             config: BaseConfig,
-            policy: TensorDictModule, 
+            actor: TensorDictModule, 
             value: TensorDictModule, 
             qvalue: TensorDictModule, 
             world_model: torch.nn.Module, #TensorDictModule, 
             replay_buffer_wm: TensorDictReplayBuffer, 
-            replay_buffer_policy: TensorDictReplayBuffer
+            replay_buffer_actor: TensorDictReplayBuffer
         ) -> None:
-        super().__init__(agent_idx, agent_id, policy, value, qvalue, world_model, replay_buffer_wm, replay_buffer_policy)
+        super().__init__(agent_idx, agent_id, actor, value, qvalue, world_model, replay_buffer_wm, replay_buffer_actor)
         self.config = config
-        self.prep_optimization()    # initialize loss criterion and optimizer for world model and policy network
+        self.prep_optimization()    # initialize loss criterion and optimizer for world model and acotr network
 
 
     def prep_optimization(self) -> None:
         """Each agent gets its own loss criterion and optimizer for world model 
-        and policy network        
+        and actor network        
         """        
         self.wm_optimizer = torch.optim.Adam(self.world_model.parameters(), lr=self.config.lr_wm)
         
-        self.sac_loss = SACLoss(self.policy, self.qvalue, self.value)
-        self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.config.lr_policy)
+        self.sac_loss = SACLoss(self.actor, self.qvalue, self.value)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.lr_actor)
         self.value_optimuzer = torch.optim.Adam(self.value.parameters(), lr=self.config.lr_value)
         self.qvalue_optimizer = torch.optim.Adam(self.qvalue.parameters(), lr=self.config.lr_qvalue)
 
 
     def act(self, tensordict: TensorDict) -> Tensor:
-        tensordict_out = self.policy(tensordict)
+        breakpoint()
+        tensordict_out = self.actor(tensordict)
         return tensordict_out["action"]
     
 
@@ -64,10 +65,10 @@ class VanillaAgent(BaseAgent):
         return loss_dict
     
 
-    def update_policy(self, tensordict: TensorDict) -> Dict[str, Any]:
-        """Update policy network
+    def update_actor(self, tensordict: TensorDict) -> Dict[str, Any]:
+        """Update actor network
         """
-        self.policy_optimizer.zero_grad()
+        self.actor_optimizer.zero_grad()
         self.value_optimuzer.zero_grad()
         self.qvalue_optimizer.zero_grad()
         tensordict = self.sac_loss(tensordict)
@@ -77,11 +78,11 @@ class VanillaAgent(BaseAgent):
         loss_actor.backward()
         loss_qvalue.backward()
         loss_value.backward()
-        self.policy_optimizer.step()        
+        self.actor_optimizer.step()        
         self.qvalue_optimizer.step()
         self.value_optimuzer.step()        
         return {
-            "loss_policy": loss_actor.item(),
+            "loss_actor": loss_actor.item(),
             "loss_qvalue": loss_qvalue.item(),
             "loss_value": loss_value.item()
         }

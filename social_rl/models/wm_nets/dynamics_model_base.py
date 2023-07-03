@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 
+
 @typechecked
 class ForwardDynamicsModelBase(nn.Module, ABC):
     def __init__(
@@ -35,4 +36,3 @@ class ForwardDynamicsModelBase(nn.Module, ABC):
     @abstractmethod
     def forward_rollout(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
-        

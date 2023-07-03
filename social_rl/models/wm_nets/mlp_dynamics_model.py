@@ -2,7 +2,12 @@ from typing import Dict, Any, Optional, Tuple, Union, List
 from typeguard import typechecked
 
 import torch
-from torchrl.modules.models import MLP
+from torch import nn
+from tensordict import (
+    TensorDict,
+    TensorDictBase,
+    nn as tdnn
+)
 
 from social_rl.models.cores import MLPModule
 from social_rl.config.base_config import BaseConfig
@@ -126,8 +131,40 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         return loss_dict
 
 
-if __name__ == "__main__":
-    
-    model = MLPDynamicsModel(0, None)
-    print(f"MLPDynamicsModel is tensordict compatible: {is_tensordict_compatible(model)}")
 
+@typechecked
+class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
+    """Wrapper for a forward dynamics model to allow it to be compatible with the TensorDictModel API.
+    Args:
+        module: The forward dynamics model.
+        in_keys: The input keys.
+        out_keys: The output keys.
+    """
+    def __init__(
+            self,
+            module: nn.Module,
+            in_keys: List[str], 
+            out_keys: List[str]                        
+        ) -> None:
+        super().__init__(module, in_keys, out_keys)
+
+    
+    def forward(
+        self,
+        tensordict: TensorDict,
+        tensordict_out: Optional[TensorDictBase] = None,
+        **kwargs,
+    ) -> TensorDict:
+        """Forward pass for the model.
+        Args:
+            tensordict: Input tensor dictionary.
+            tensordict_out: Output tensor dictionary.
+            **kwargs: Additional arguments.
+        Returns:
+            Output tensor dictionary.
+        """
+        if tensordict_out is None:
+            tensordict_out = TensorDictBase()
+        for key in self.out_keys:
+            tensordict_out[key] = self.module(tensordict[key], **kwargs)
+        return tensordict_out
