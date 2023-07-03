@@ -1,6 +1,7 @@
 """Base classes for dynamics models of the world and other agents.
 """
 from typeguard import typechecked
+from typing import Optional
 from abc import ABC, abstractmethod
 
 import torch
@@ -15,11 +16,14 @@ class ForwardDynamicsModelBase(nn.Module, ABC):
             backbone: nn.Module,
             obs_head: nn.Module,
             action_head: nn.Module,
+            action_dim: Optional[int] = None,
         ) -> None:
         super().__init__()
         self.backbone = backbone
         self.obs_head = obs_head
         self.action_head = action_head
+        if action_dim is not None:
+            self.action_dim = action_dim 
     
     @abstractmethod
     def forward_obs_head(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:

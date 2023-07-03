@@ -3,7 +3,7 @@
 DEFAULT_ARGS = {    
     'seed': 0,
     'log_dir': './logs/',
-    'batch_size': 512,
+    'batch_size': 32,
     'epochs': 1e5,
     'num_episodes': 1e4,
     'episode_length': 1e4,

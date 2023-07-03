@@ -11,6 +11,7 @@ from tensordict import (
 
 from social_rl.models.cores import MLPModule
 from social_rl.config.base_config import BaseConfig
+from social_rl.utils.utils import convert_tensordict_to_tensor
 from social_rl.models.wm_nets.dynamics_model_base import ForwardDynamicsModelBase
 
 
@@ -22,13 +23,21 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
             agent_idx: index to help identify which obs and action tensor belong to this agent
             config: should be the callable config class
     """    
-    def __init__(self, agent_idx: int, config: BaseConfig) -> None:
-        self.agent_idx = agent_idx        
+    def __init__(
+            self, 
+            agent_idx: int, 
+            config: BaseConfig            
+        ) -> None:
+        self.agent_idx = agent_idx
         self.config = config
         backbone = MLPModule(self.config.backbone_kwargs)
         obs_head = MLPModule(self.config.obs_head_kwargs)
-        action_head = MLPModule(self.config.action_head_kwargs)
-        super().__init__(backbone, obs_head, action_head)
+        action_head = MLPModule(self.config.action_head_kwargs)        
+        action_dim = self.config.action_head_kwargs["out_features"]
+        assert action_dim == self.config.backbone_kwargs["in_features"] \
+            - self.config.obs_head_kwargs["out_features"], \
+            "action_dim must be equal to the difference between backbone in_features and obs_head out_features"
+        super().__init__(backbone, obs_head, action_head, action_dim=action_dim)
 
 
     def forward_backbone(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
@@ -107,6 +116,7 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         return:
             loss_dict: dictionary of losses  
         """
+        breakpoint()
         loss_dict = {}
         num_agents = obs.size(1)
         self_obs = obs[:, self.agent_idx, :]
@@ -162,9 +172,17 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
             **kwargs: Additional arguments.
         Returns:
             Output tensor dictionary.
-        """
+        """        
         if tensordict_out is None:
-            tensordict_out = TensorDictBase()
-        for key in self.out_keys:
-            tensordict_out[key] = self.module(tensordict[key], **kwargs)
+            tensordict_out = TensorDict({}, batch_size=tensordict.batch_size, device=tensordict.device)                    
+
+        # obs: torch.Tensor, actions: torch.Tensor, 
+        # prev_actions: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:        
+        obs = convert_tensordict_to_tensor(tensordict.get('observation'), "obs")
+        next_obs = convert_tensordict_to_tensor(tensordict.get(('next', 'observation')), "obs")
+        action = convert_tensordict_to_tensor(tensordict.get('action'), "action", self.module.action_dim)
+        prev_action= convert_tensordict_to_tensor(tensordict.get('prev_action'), "action", self.module.action_dim)
+        loss_dict = self.module(obs, action, prev_action, next_obs)
+        # for key in self.out_keys:
+        #     tensordict_out[key] = self.module(tensordict[key], **kwargs)
         return tensordict_out

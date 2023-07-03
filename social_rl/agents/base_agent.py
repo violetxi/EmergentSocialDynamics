@@ -44,7 +44,7 @@ class BaseAgent(ABC):
         self.value = value
         self.qvalue = qvalue
         self.replay_buffer_wm = replay_buffer_wm
-        self.replay_buffer_acotr = replay_buffer_actor
+        self.replay_buffer_actor = replay_buffer_actor
 
 
     @abstractmethod

@@ -47,10 +47,19 @@ class VanillaAgent(BaseAgent):
         self.qvalue_optimizer = torch.optim.Adam(self.qvalue.parameters(), lr=self.config.lr_qvalue)
 
 
-    def act(self, tensordict: TensorDict) -> Tensor:
-        breakpoint()
-        tensordict_out = self.actor(tensordict)
-        return tensordict_out["action"]
+    def act(self, tensordict: TensorDict, is_warm_up=False) -> Tensor:
+        # initial time step in the episode tensordict only has initial observation 
+        # agent takes random action        
+        if "action" not in tensordict.keys():
+            num_actions = self.config.actor_config.net_kwargs['out_features']
+            action = torch.randint(low=1, high=num_actions, size=tensordict.shape)
+            return action
+        else:
+            # after initial time step, agent uses world model to predict next state
+            # at this point tensordict has observation, action, next_obs, next_action, prev_action                
+            tensordict_wm = self.world_model(tensordict)
+            tensordict_out = self.actor(tensordict_wm)
+            return tensordict_out["action"]
     
 
     def update_wm(self, tensordict: TensorDict) -> Dict[str, float]:

@@ -5,6 +5,7 @@ from typeguard import typechecked
 from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
+import tensordict as td
 from torchrl.data.tensor_specs import (
     BinaryDiscreteTensorSpec,
     BoundedTensorSpec,
@@ -45,7 +46,7 @@ def ensure_dir(directory: str) -> None:
 
 @typechecked
 def gym_to_torchrl_spec_transform(
-    spec: Any, 
+    spec: Any,
     dtype: Optional[torch.dtype] = None, 
     device: torch.device = "cpu", 
     categorical_action_encoding: bool = False,
@@ -61,7 +62,7 @@ def gym_to_torchrl_spec_transform(
         import gymnasium as gym
     else:
         import gym
-
+    
     if isinstance(spec, gym.spaces.tuple.Tuple):
         raise NotImplementedError("gym.spaces.tuple.Tuple mapping not yet implemented")
     if isinstance(spec, gym.spaces.discrete.Discrete):
@@ -74,8 +75,10 @@ def gym_to_torchrl_spec_transform(
             numpy_to_torch_dtype_dict[spec.dtype]
             if categorical_action_encoding
             else torch.long
+        )        
+        return action_space_cls(
+            spec.n, device=device, dtype=dtype
         )
-        return action_space_cls(spec.n, device=device, dtype=dtype)
     elif isinstance(spec, gym.spaces.multi_binary.MultiBinary):
         return BinaryDiscreteTensorSpec(
             spec.n, device=device, dtype=numpy_to_torch_dtype_dict[spec.dtype]
@@ -87,11 +90,14 @@ def gym_to_torchrl_spec_transform(
             else torch.long
         )
         return (
-            MultiDiscreteTensorSpec(spec.nvec, device=device, dtype=dtype)
-            if categorical_action_encoding
-            else MultiOneHotDiscreteTensorSpec(spec.nvec, device=device, dtype=dtype)
+            MultiDiscreteTensorSpec(
+            spec.nvec, device=device, dtype=dtype
         )
-    elif isinstance(spec, gym.spaces.Box):
+            if categorical_action_encoding
+            else MultiOneHotDiscreteTensorSpec(
+            spec.nvec, device=device, dtype=dtype)
+        )
+    elif isinstance(spec, gym.spaces.Box):        
         shape = spec.shape
         if not len(shape):
             shape = torch.Size([1])
@@ -99,7 +105,7 @@ def gym_to_torchrl_spec_transform(
             dtype = numpy_to_torch_dtype_dict[spec.dtype]
         low = torch.tensor(spec.low, device=device, dtype=dtype)
         high = torch.tensor(spec.high, device=device, dtype=dtype)
-        is_unbounded = low.isinf().all() and high.isinf().all()
+        is_unbounded = low.isinf().all() and high.isinf().all()        
         return (
             UnboundedContinuousTensorSpec(shape, device=device, dtype=dtype)
             if is_unbounded
@@ -152,3 +158,36 @@ def load_args(file_path: str) -> argparse.Namespace:
     with open(file_path, 'r') as f:
         args = json.load(f)
     return argparse.Namespace(**args)
+
+
+@typechecked
+def convert_tensordict_to_tensor(
+    tensordict: td.TensorDict, 
+    td_type: str,
+    action_dim: Optional[int] = None,
+    ) -> torch.Tensor:
+    """Convert a tensordict to a torch tensor
+    Args:
+        tensordict (td.TensorDict): a tensordict
+        td_type (str): the type of tensordict (obs, act, rew etc)
+    """
+    if td_type == "obs":
+        max_size = max(tensor.shape[0] for tensor in tensordict.values())
+        tensor_out = torch.stack(
+            [torch.nn.functional.pad(t, (0, max_size - t.shape[0])) 
+             if t.shape[0] < max_size else t for t in tensordict.values()]
+        )
+        tensor_out = tensor_out.unsqueeze(0)
+    elif td_type == "action":
+        assert action_dim is not None, \
+            "action_dim must be provided for action conversion"
+        action_list = list(tensordict.values())    # (num_agents, )
+        tensor_out = torch.stack(action_list).unsqueeze(-1)    # (num_agents, 1)        
+        tensor_out = tensor_out.unsqueeze(0)    # add batch_size
+        #breakpoint()
+    elif td_type == "reward":
+        reward_list = list(tensordict['next']['reward'].values())    # (num_agents, 1)
+        tensor_out = torch.stack(reward_list).unsqueeze(0)    # (1, num_agents, 1)
+    else:
+        raise NotImplementedError(f"Conversion for td_type {td_type} not implemented")
+    return tensor_out

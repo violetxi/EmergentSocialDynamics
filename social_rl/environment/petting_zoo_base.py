@@ -16,18 +16,24 @@ from social_rl.utils.utils import gym_to_torchrl_spec_transform
 
 
 @typechecked
-class PettingZooMPEBase(_EnvWrapper):
-    def __init__(self,seed: int, config: BaseConfig, **kwargs) -> None:
-        """
-        Args:
-            seed: random seed
-            config: config object (need to be a callable, e.g. class Config)
-        """        
+class PettingZooMPEBase(_EnvWrapper):    
+    """PettingZoo MPE environment wrapper (Environment doesn't need a batch_size cause 
+    it's only used to generate information to be stored in replay buffer in which batches 
+    are sampled from)
+    args:
+        seed: random seed
+        config: config object (e.g. class Config)
+        kwargs: kwargs for config object (e.g. device)
+    """
+    def __init__(
+            self, 
+            seed: int, 
+            config: BaseConfig,             
+            base_kwargs: Dict
+        ) -> None:                
         self.seed = seed
-        #self.config = config().env_config
         self.config = config
-        self.kwargs = kwargs
-        super().__init__(**kwargs)
+        super().__init__(**base_kwargs)
 
 
     def _get_mpe_env_cls(self, env_name: str) -> ModuleType:
@@ -89,9 +95,9 @@ class PettingZooMPEBase(_EnvWrapper):
     def _step(self, tensordict: TensorDictBase) -> TensorDictBase:
         # for MARL env, tensordict['action'] is a dict of {agent: action, ...}
         # PettingZoo parallel_env then takes on step() with with all agents' actions at once
-        td_actions = tensordict.get("action").to_dict()
+        td_actions = tensordict.get("action").to_dict()        
         actions = {k: v.numpy() for k, v in td_actions.items()}
-
+        
         for _ in range(self.wrapper_frame_skip):            
             observations, rewards, dones, truncations, infos = self._env.step(actions)
 
@@ -116,12 +122,14 @@ class PettingZooMPEBase(_EnvWrapper):
 
     def _make_specs(self, env: ParallelEnv) -> None:
         self.categorical_action_encoding = not env.aec_env.env.env.continuous_actions     
-        action_spaces = {agent : env.action_space(agent) for agent in env.possible_agents}
-        self.action_spec = gym_to_torchrl_spec_transform(
+        action_spaces = {agent : env.action_space(agent) for agent in env.possible_agents}    
+        action_spec = gym_to_torchrl_spec_transform(
             action_spaces,
             device=self.device,
             categorical_action_encoding=self.categorical_action_encoding,
         )
+        self.action_spec = action_spec
+
         observation_spaces = {
             'observation': {agent : env.observation_space(agent) for agent in env.possible_agents}
         }        
@@ -129,9 +137,10 @@ class PettingZooMPEBase(_EnvWrapper):
             observation_spaces,
             device=self.device,
             categorical_action_encoding=self.categorical_action_encoding,
-        )        
+        )
         if not isinstance(observation_spec, CompositeSpec):
-            observation_spec = CompositeSpec(observation=observation_spec)
+            observation_spec = CompositeSpec(
+                observation=observation_spec)
         self.observation_spec = observation_spec        
         reward_spaces = {
             agent: 

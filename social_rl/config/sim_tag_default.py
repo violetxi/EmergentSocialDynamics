@@ -44,9 +44,7 @@ class EnvConfig(BaseConfig):
     def __init__(self, actor_config: BaseConfig) -> None:
         self.env_name = "mpe"
         self.task_name = "simple_tag_v3"
-        self.env_class = PettingZooMPEBase
-        self.obs_dim = 32
-        self.action_dim = 5
+        self.env_class = PettingZooMPEBase        
         self.env_kwargs = dict(
             num_good=actor_config.num_good,
             num_adversaries=actor_config.num_adversaries,
@@ -139,7 +137,7 @@ class ReplayBufferConfig(BaseConfig):
 class WmConfig(BaseConfig):
     def __init__(self) -> None:
         self.backbone_kwargs = dict(
-            #in_features=32,
+            in_features=32+5,    # observation + action
             out_features=128,
             num_cells=[128, 128],
             activation_class=nn.ReLU,
@@ -166,7 +164,8 @@ class WmConfig(BaseConfig):
             device="cpu",
         )
         self.wm_module_cls =  MLPDynamicsModel
-        self.in_keys = ["obs", "action", "past_actions", "next_actions", "next_obs"]
+        self.in_keys = [
+            "observation", "action", "prev_action", ("next", "observation")]
         self.out_keys = ["latent", "loss_dict"]
         self.wrapper_class = MLPDynamicsTensorDictModel
 
@@ -216,4 +215,4 @@ class Config(BaseConfig):
             wm_config,
             replay_buffer_config
         )
-        self.env_config = EnvConfig(self.agent_config)
+        self.env_config = EnvConfig(self.agent_config)        

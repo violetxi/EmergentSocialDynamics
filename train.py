@@ -4,6 +4,7 @@ Trainer class and training loop are here
 import argparse
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
+from copy import deepcopy
 
 from tensordict import TensorDict
 
@@ -83,7 +84,13 @@ class Trainer:
         env_config = self.config.env_config
         self.env_name = env_config.env_name
         env_class = env_config.env_class
-        self.env = env_class(seed, env_config)
+        # @TODO: change device after servers are back online
+        # Do not use batch_size for environment
+        kwargs = {
+            "device": "cpu"
+        }
+        self.env = env_class(seed, env_config, kwargs)
+        # self.env = env_class(seed, env_config)
         print(f"Finished initializing {self.env_name} environment")
 
 
@@ -101,7 +108,7 @@ class Trainer:
             in_keys=actor_config.in_keys,
             out_keys=actor_config.out_keys,
             spec=action_spec,
-        )        
+        )
 
         value_config = self.config.agent_config.value_config
         value_module = value_config.net_module(value_config.net_kwargs)
@@ -115,12 +122,10 @@ class Trainer:
         # outkeys defaults to state_action_value with obs as inkey
         qvalue = value_config.wrapper_class(
             qvalue_module, 
-            in_keys=value_config.in_keys)        
-
-        obs_dim = self.env.observation_spec["observation"][agent_id].shape[0]
-        self.config.agent_config.wm_config.backbone_kwargs["in_features"] = obs_dim
+            in_keys=value_config.in_keys)
+        
         wm_config = self.config.agent_config.wm_config                
-        wm_module = wm_config.wm_module_cls(agent_idx, wm_config)
+        wm_module = wm_config.wm_module_cls(agent_idx, wm_config)        
         world_model = wm_config.wrapper_class(
             wm_module, 
             wm_config.in_keys, 
@@ -141,7 +146,7 @@ class Trainer:
             replay_buffer_wm=replay_buffer_wm, 
             replay_buffer_actor=replay_buffer_actor
         )
-        print(f"Finished initializing {agent_id} with obs_dim {obs_dim}") 
+        #print(f"Finished initializing {agent_id} with obs_dim {obs_dim}") 
         return agent
 
 
@@ -164,11 +169,16 @@ class Trainer:
         """
         tensordict = self.env.reset()
         print(f"Starting warm-up steps for {self.args.warm_up_steps} steps")
-        for _ in range(self.args.warm_up_steps):            
+
+        for _ in range(self.args.warm_up_steps): 
+            actions = {}           
             for agent_id, agent in self.agents.items():
                 action = agent.act(tensordict.clone())
-                actions = {agent_id: action}
-            tensordict = self.env.step(actions)
+                print(f"Agent {agent_id} takes action {action}")
+                actions[agent_id] = action
+            tensordict["action"] = deepcopy(actions)                   
+            tensordict = self.env.step(tensordict)
+            tensordict["prev_action"] = deepcopy(actions)            
             for agent_id, agent in self.agents.items():
                 agent.replay_buffer_wm.add(tensordict.clone())
                 agent.replay_buffer_actor.add(tensordict.clone())        
