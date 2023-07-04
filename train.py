@@ -6,6 +6,7 @@ from defaults import DEFAULT_ARGS
 from typeguard import typechecked
 from copy import deepcopy
 
+import torch
 from tensordict import TensorDict
 
 from social_rl.agents.base_agent import BaseAgent
@@ -173,10 +174,12 @@ class Trainer:
         for _ in range(self.args.warm_up_steps): 
             actions = {}           
             for agent_id, agent in self.agents.items():
-                action = agent.act(tensordict.clone())
-                print(f"Agent {agent_id} takes action {action}")
+                action = agent.act(tensordict.clone())                
+                if len(action.shape) == 2:
+                    action = torch.argmax(action, dim=1)[0]                
                 actions[agent_id] = action
-            tensordict["action"] = deepcopy(actions)                   
+                print(f"Agent {agent_id} takes action {action}")
+            tensordict["action"] = deepcopy(actions)
             tensordict = self.env.step(tensordict)
             tensordict["prev_action"] = deepcopy(actions)            
             for agent_id, agent in self.agents.items():

@@ -40,7 +40,11 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         super().__init__(backbone, obs_head, action_head, action_dim=action_dim)
 
 
-    def forward_backbone(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+    def forward_backbone(
+            self, 
+            obs: torch.Tensor, 
+            action: torch.Tensor
+        ) -> torch.Tensor:
         """Backbone is shared for obs and action prediction to create a latent representation of 
         agent's observations and actions
         args:
@@ -54,11 +58,16 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
             "obs and action must have same number of dimensions"
         
         if len(obs.shape) == 3:
-            obs = obs.reshape(obs.size(0), -1)
+            obs = obs.reshape(-1, obs.size(-1))
+            action = action.reshape(-1, action.size(-1))            
         return self.backbone(torch.cat([obs, action], dim=-1))
 
 
-    def forward_obs_head(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+    def forward_obs_head(
+            self, 
+            obs: torch.Tensor, 
+            action: torch.Tensor
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Use agent's own observation (t) and action (t) to predict next observation
         args:
             obs (B, O): observation tensor for self at timestep t
@@ -68,10 +77,14 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
             pred_obs(B, O): predicted observation tensor for self at timestep t+1
         """
         x = self.forward_backbone(obs, action)
-        return self.obs_head(x)
+        return x, self.obs_head(x)
     
 
-    def forward_action_head(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+    def forward_action_head(
+            self, 
+            obs: torch.Tensor,
+            action: torch.Tensor
+        ) -> torch.Tensor:
         """Use other agents' observation (t) and action (t-1) to predict next action
         args:
             obs (B, N-1, A): observation tensor for other agents at timestep t
@@ -83,7 +96,12 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         x = self.forward_backbone(obs, action)  
         return self.action_head(x)
     
-    def compute_obs_loss(self, obs: torch.Tensor, pred_obs: torch.Tensor) -> torch.Tensor:
+
+    def compute_obs_loss(
+            self, 
+            obs: torch.Tensor, 
+            pred_obs: torch.Tensor
+        ) -> torch.Tensor:
         """Compute observation loss (MSE)
         args:
             obs (B, O): observation tensor for self at timestep t+1
@@ -94,6 +112,7 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         """
         return torch.mean((obs - pred_obs)**2)
     
+
     def compute_action_loss(self, action: torch.Tensor, pred_action: torch.Tensor) -> torch.Tensor: 
         """Compute action loss (CE) assuming discrete action space
         args:
@@ -103,9 +122,19 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         return:
             loss (1): action loss
         """
-        return torch.nn.functional.cross_entropy(pred_action, action)
+        if len(action.shape) == 3:
+            action = action.reshape(-1, action.size(-1))
+        action_labels = torch.argmax(action, dim=-1)
+        return torch.nn.functional.cross_entropy(pred_action, action_labels)
     
-    def forward(self, obs: torch.Tensor, actions: torch.Tensor, prev_actions: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:
+
+    def forward(
+            self, 
+            obs: torch.Tensor, 
+            actions: torch.Tensor, 
+            prev_actions: torch.Tensor, 
+            next_obs: torch.Tensor
+        ) -> Dict[str, torch.Tensor]:
         """Compute loss for both observation and action
         args (all tensors are for all agents):            
             obs (B, N, O): observation at timestep t
@@ -114,31 +143,33 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
             next_obs (B, N, O): observation at timestep t+1
 
         return:
-            loss_dict: dictionary of losses  
-        """
-        breakpoint()
+            out_dict: dictionary of losses  
+        """        
+        out_dict = {}
         loss_dict = {}
         num_agents = obs.size(1)
         self_obs = obs[:, self.agent_idx, :]
         self_actions = actions[:, self.agent_idx, :]
-        self_next_obs = next_obs[:, self.agent_idx, :]
-        pred_obs = self.forward_obs_head(self_obs, self_actions)
+        self_next_obs = next_obs[:, self.agent_idx, :]        
+        latent, pred_obs = self.forward_obs_head(self_obs, self_actions)
         obs_loss = self.compute_obs_loss(self_next_obs, pred_obs)
+        out_dict['latent'] = latent
         loss_dict['obs_loss'] = obs_loss
 
-        # create a mask that is True for all agents except the one at agent_index
+        # create a mask that is True for all agents except the one at agent_index        
         mask = torch.ones(num_agents, dtype=bool)
         mask[self.agent_idx] = 0
         other_obs = obs[:, mask, :]
         other_prev_actions = prev_actions[:, mask, :]
-        other_actions = actions[:, mask, :]
+        other_action = actions[:, mask, :]        
         pred_action = self.forward_action_head(other_obs, other_prev_actions)
-        action_loss = self.compute_action_loss(other_actions, pred_action)
+        action_loss = self.compute_action_loss(other_action, pred_action)
         loss_dict['action_loss'] = action_loss
 
         loss = obs_loss + action_loss
         loss_dict['loss'] = loss
-        return loss_dict
+        out_dict['loss_dict'] = loss_dict
+        return out_dict
 
 
 
@@ -181,8 +212,12 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
         obs = convert_tensordict_to_tensor(tensordict.get('observation'), "obs")
         next_obs = convert_tensordict_to_tensor(tensordict.get(('next', 'observation')), "obs")
         action = convert_tensordict_to_tensor(tensordict.get('action'), "action", self.module.action_dim)
-        prev_action= convert_tensordict_to_tensor(tensordict.get('prev_action'), "action", self.module.action_dim)
-        loss_dict = self.module(obs, action, prev_action, next_obs)
-        # for key in self.out_keys:
-        #     tensordict_out[key] = self.module(tensordict[key], **kwargs)
+        prev_action= convert_tensordict_to_tensor(tensordict.get('prev_action'), "action", self.action_dim)
+        wm_dict = self.module(obs, action, prev_action, next_obs)
+
+        assert list(wm_dict.keys()) == self.out_keys, \
+            "The output keys of the module must match the out_keys of the TensorDictModel."
+        for k in self.out_keys:
+            tensordict_out[k] = wm_dict[k]
+
         return tensordict_out

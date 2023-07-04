@@ -170,6 +170,8 @@ def convert_tensordict_to_tensor(
     Args:
         tensordict (td.TensorDict): a tensordict
         td_type (str): the type of tensordict (obs, act, rew etc)
+        action_dim (Optional[int], optional): the action dimension to help create 
+        one-hot encoding for actions
     """
     if td_type == "obs":
         max_size = max(tensor.shape[0] for tensor in tensordict.values())
@@ -179,12 +181,11 @@ def convert_tensordict_to_tensor(
         )
         tensor_out = tensor_out.unsqueeze(0)
     elif td_type == "action":
-        assert action_dim is not None, \
-            "action_dim must be provided for action conversion"
-        action_list = list(tensordict.values())    # (num_agents, )
-        tensor_out = torch.stack(action_list).unsqueeze(-1)    # (num_agents, 1)        
-        tensor_out = tensor_out.unsqueeze(0)    # add batch_size
-        #breakpoint()
+        # assert action_dim is not None, \
+        #     "action_dim must be provided for action conversion"
+        tensor_out = torch.stack(list(tensordict.values()))    # (num_agents, )
+        tensor_out = torch.nn.functional.one_hot(tensor_out, action_dim)    # (num_agents, action_dim)
+        tensor_out = tensor_out.unsqueeze(0)    # add batch dimension    
     elif td_type == "reward":
         reward_list = list(tensordict['next']['reward'].values())    # (num_agents, 1)
         tensor_out = torch.stack(reward_list).unsqueeze(0)    # (1, num_agents, 1)
