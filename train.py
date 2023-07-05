@@ -146,8 +146,7 @@ class Trainer:
             world_model=world_model, 
             replay_buffer_wm=replay_buffer_wm, 
             replay_buffer_actor=replay_buffer_actor
-        )
-        #print(f"Finished initializing {agent_id} with obs_dim {obs_dim}") 
+        )        
         return agent
 
 
@@ -171,29 +170,43 @@ class Trainer:
         tensordict = self.env.reset()
         print(f"Starting warm-up steps for {self.args.warm_up_steps} steps")
 
-        for _ in range(self.args.warm_up_steps): 
-            actions = {}           
-            for agent_id, agent in self.agents.items():
-                action = agent.act(tensordict.clone())                
-                if len(action.shape) == 2:
-                    action = torch.argmax(action, dim=1)[0]                
-                actions[agent_id] = action
-                print(f"Agent {agent_id} takes action {action}")
-            tensordict["action"] = deepcopy(actions)
-            tensordict = self.env.step(tensordict)
-            tensordict["prev_action"] = deepcopy(actions)            
+        for i in range(self.args.warm_up_steps):
+            print(f"Warm-up step {i}")
+            tensordict = self._step_episode(tensordict)
+            # actions = {}           
+            # for agent_id, agent in self.agents.items():
+            #     action = agent.act(tensordict.clone())                
+            #     if len(action.shape) == 2:
+            #         action = torch.argmax(action, dim=1)[0]                
+            #     actions[agent_id] = action
+            # tensordict["action"] = deepcopy(actions)
+            # tensordict = self.env.step(tensordict)
+            # tensordict["prev_action"] = deepcopy(actions)            
             for agent_id, agent in self.agents.items():
                 agent.replay_buffer_wm.add(tensordict.clone())
                 agent.replay_buffer_actor.add(tensordict.clone())        
 
 
-    def _step_episode(self) -> TensorDict:
-        for agent_id, agent in self.agents.items(): 
-                tensordict = agent.replay_buffer_wm.sample()
-                action = agent.act(tensordict.clone())
-                actions = {agent_id: action}
-        tensordict_out = self.env.step(actions)
-        return tensordict_out
+    def _step_episode(self, tensordict: TensorDict) -> TensorDict:
+        # actions = {}
+        # for agent_id, agent in self.agents.items():            
+        #     action = agent.act(tensordict)
+        #     actions = {agent_id: action}        
+        # tensordict["action"] = deepcopy(actions)
+        # breakpoint()
+        # tensordict_out = self.env.step(tensordict)
+        # tensordict_out["prev_action"] = deepcopy(actions)
+        actions = {}           
+        for agent_id, agent in self.agents.items():
+            action = agent.act(tensordict.clone())
+            if len(action.shape) == 2:
+                action = torch.argmax(action, dim=1)[0]
+            actions[agent_id] = action
+        tensordict["action"] = deepcopy(actions)
+        tensordict = self.env.step(tensordict)
+        tensordict["prev_action"] = deepcopy(actions)
+        return tensordict
+
 
     def _train_episode(self, tensordict: TensorDict) -> None:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
@@ -207,9 +220,8 @@ class Trainer:
                 agent.replay_buffer_actor.add(tensordict.clone())
             
             if tensordict['done'].all():
-                break
+                return
         
-        for epoch in range(self.args.epochs):            
             for agent_id, agent in self.agents.items():
                 tensordict_wm = agent.replay_buffer_wm.sample()
                 wm_dict = agent.update_wm(tensordict_wm)

@@ -172,23 +172,32 @@ def convert_tensordict_to_tensor(
         td_type (str): the type of tensordict (obs, act, rew etc)
         action_dim (Optional[int], optional): the action dimension to help create 
         one-hot encoding for actions
+    Returns:
+        tensor_out (torch.Tensor): a tensor of the input (N, B, D)
     """
     if td_type == "obs":
-        max_size = max(tensor.shape[0] for tensor in tensordict.values())
+        # if input is unbatched, add batch dimension        
+        max_size = max(tensor.shape[-1] for tensor in tensordict.values())      
         tensor_out = torch.stack(
-            [torch.nn.functional.pad(t, (0, max_size - t.shape[0])) 
-             if t.shape[0] < max_size else t for t in tensordict.values()]
+            [torch.nn.functional.pad(t, (0, max_size - t.shape[-1])) 
+             if t.shape[-1] < max_size else t for t in tensordict.values()]
         )
-        tensor_out = tensor_out.unsqueeze(0)
+        if len( tensor_out.shape) == 2:
+            # add batch dimension if input is unbatched
+            tensor_out = tensor_out.unsqueeze(1)
     elif td_type == "action":
         # assert action_dim is not None, \
         #     "action_dim must be provided for action conversion"
         tensor_out = torch.stack(list(tensordict.values()))    # (num_agents, )
         tensor_out = torch.nn.functional.one_hot(tensor_out, action_dim)    # (num_agents, action_dim)
-        tensor_out = tensor_out.unsqueeze(0)    # add batch dimension    
+        if len(tensor_out.shape) == 2:
+            # add batch dimension if input is unbatched
+            tensor_out = tensor_out.unsqueeze(1)
     elif td_type == "reward":
         reward_list = list(tensordict['next']['reward'].values())    # (num_agents, 1)
-        tensor_out = torch.stack(reward_list).unsqueeze(0)    # (1, num_agents, 1)
+        if len(tensor_out.shape) == 2:
+            # add batch dimension if input is unbatched
+            tensor_out = torch.stack(reward_list).unsqueeze(1)    # (1, num_agents, 1)
     else:
         raise NotImplementedError(f"Conversion for td_type {td_type} not implemented")
     return tensor_out

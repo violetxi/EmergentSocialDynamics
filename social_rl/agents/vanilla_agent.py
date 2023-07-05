@@ -47,7 +47,7 @@ class VanillaAgent(BaseAgent):
         self.qvalue_optimizer = torch.optim.Adam(self.qvalue.parameters(), lr=self.config.lr_qvalue)
 
 
-    def act(self, tensordict: TensorDict, is_warm_up=False) -> Tensor:
+    def act(self, tensordict: TensorDict) -> Tensor:
         # initial time step in the episode tensordict only has initial observation 
         # agent takes random action        
         if "action" not in tensordict.keys():
@@ -66,6 +66,7 @@ class VanillaAgent(BaseAgent):
         """Update world model
         """
         self.wm_optimizer.zero_grad()
+        #breakpoint()    
         tensordict_out = self.world_model(tensordict)
         loss_dict = self.world_model.loss(tensordict_out, tensordict)
         loss = loss_dict["loss"]
