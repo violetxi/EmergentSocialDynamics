@@ -179,7 +179,7 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         loss_dict['action_loss'] = action_loss        
         
         out_dict['loss_dict'] = loss_dict
-        return out_dict
+        return out_dict    
 
 
 
@@ -215,7 +215,7 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
             Output tensor dictionary.
         """        
         if tensordict_out is None:
-            tensordict_out = TensorDict({}, batch_size=tensordict.batch_size, device=tensordict.device)                    
+            tensordict_out = tensordict.clone()    #TensorDict({}, batch_size=tensordict.batch_size, device=tensordict.device)                    
 
         # obs: torch.Tensor, actions: torch.Tensor, 
         # prev_actions: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:        
@@ -232,3 +232,20 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
             tensordict_out[k] = wm_dict[k]
 
         return tensordict_out
+    
+
+    def loss(self, tensordict: TensorDict) -> tuple[
+            Dict[str, torch.Tensor],
+            TensorDict
+    ]:
+        tensordict_out = self(tensordict)        
+        action_loss = tensordict_out['loss_dict']['action_loss'].mean()
+        obs_loss = tensordict_out['loss_dict']['obs_loss'].mean()
+        loss = action_loss + obs_loss        
+        loss_dict = {
+            'action_loss': action_loss,
+            'obs_loss': obs_loss,
+            'loss': loss
+        }
+        return loss_dict, tensordict_out
+        

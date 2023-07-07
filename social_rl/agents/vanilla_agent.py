@@ -6,7 +6,7 @@ from typing import Dict, Any
 import torch
 from tensordict.nn import TensorDictModule
 from torchrl.data import TensorDictReplayBuffer
-from torchrl.objectives.sac import SACLoss
+from torchrl.objectives.sac import DiscreteSACLoss    #SACLoss
 
 from social_rl.config.base_config import BaseConfig
 from social_rl.agents.base_agent import BaseAgent
@@ -41,17 +41,23 @@ class VanillaAgent(BaseAgent):
         """        
         self.wm_optimizer = torch.optim.Adam(self.world_model.parameters(), lr=self.config.lr_wm)
         
-        self.sac_loss = SACLoss(self.actor, self.qvalue, self.value)
+        #self.sac_loss = SACLoss(self.actor, self.qvalue, self.value)
+        self.sac_loss = DiscreteSACLoss(
+            self.actor, 
+            self.qvalue, 
+            num_actions=self.actor.spec["action"].space.n
+        )
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.lr_actor)
-        self.value_optimuzer = torch.optim.Adam(self.value.parameters(), lr=self.config.lr_value)
+        #self.value_optimuzer = torch.optim.Adam(self.value.parameters(), lr=self.config.lr_value)
         self.qvalue_optimizer = torch.optim.Adam(self.qvalue.parameters(), lr=self.config.lr_qvalue)
 
 
     def act(self, tensordict: TensorDict) -> Tensor:
+
         # initial time step in the episode tensordict only has initial observation 
-        # agent takes random action        
+        # agent takes random action
         if "action" not in tensordict.keys():
-            num_actions = self.config.actor_config.net_kwargs['out_features']
+            num_actions = self.config.actor_config.net_kwargs['out_features'] // 2            
             action = torch.randint(low=1, high=num_actions, size=tensordict.shape)
             return action
         else:
@@ -62,37 +68,37 @@ class VanillaAgent(BaseAgent):
             return tensordict_out["action"]
     
 
-    def update_wm(self, tensordict: TensorDict) -> Dict[str, float]:
+    def update_wm(self, tensordict: TensorDict) -> tuple[
+        Dict[str, torch.Tensor],
+        TensorDict
+        ]:
         """Update world model
         """
         self.wm_optimizer.zero_grad()
-        #breakpoint()    
-        tensordict_out = self.world_model(tensordict)
-        loss_dict = self.world_model.loss(tensordict_out, tensordict)
+        loss_dict, tensordict_out = self.world_model.loss(tensordict)        
         loss = loss_dict["loss"]
         loss.backward()
         self.wm_optimizer.step()
-        return loss_dict
-    
+        return loss_dict, tensordict_out
+        
 
     def update_actor(self, tensordict: TensorDict) -> Dict[str, Any]:
         """Update actor network
         """
         self.actor_optimizer.zero_grad()
-        self.value_optimuzer.zero_grad()
         self.qvalue_optimizer.zero_grad()
+
         tensordict = self.sac_loss(tensordict)
         loss_actor = tensordict["loss_actor"]
         loss_qvalue = tensordict["loss_qvalue"]
-        loss_value = tensordict["loss_value"]
+
         loss_actor.backward()
         loss_qvalue.backward()
-        loss_value.backward()
+
         self.actor_optimizer.step()        
         self.qvalue_optimizer.step()
-        self.value_optimuzer.step()        
         return {
             "loss_actor": loss_actor.item(),
             "loss_qvalue": loss_qvalue.item(),
-            "loss_value": loss_value.item()
+            #"loss_value": loss_value.item()
         }

@@ -2,7 +2,7 @@ import os
 import json
 import argparse
 from typeguard import typechecked
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional
 
 import torch
 import tensordict as td
@@ -175,9 +175,14 @@ def convert_tensordict_to_tensor(
     Returns:
         tensor_out (torch.Tensor): a tensor of the input (N, B, D)
     """
+    if isinstance(tensordict[list(tensordict.keys())[0]], td.MemmapTensor):
+        # if input contains memmap, convert to tensor
+        for k, v in tensordict.items():
+            tensordict[k] = v.as_tensor()
+
     if td_type == "obs":
         # if input is unbatched, add batch dimension        
-        max_size = max(tensor.shape[-1] for tensor in tensordict.values())      
+        max_size = max(tensor.shape[-1] for tensor in tensordict.values())               
         tensor_out = torch.stack(
             [torch.nn.functional.pad(t, (0, max_size - t.shape[-1])) 
              if t.shape[-1] < max_size else t for t in tensordict.values()]
@@ -200,4 +205,5 @@ def convert_tensordict_to_tensor(
             tensor_out = torch.stack(reward_list).unsqueeze(1)    # (1, num_agents, 1)
     else:
         raise NotImplementedError(f"Conversion for td_type {td_type} not implemented")
+        
     return tensor_out

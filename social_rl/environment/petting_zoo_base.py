@@ -96,8 +96,8 @@ class PettingZooMPEBase(_EnvWrapper):
         # for MARL env, tensordict['action'] is a dict of {agent: action, ...}
         # PettingZoo parallel_env then takes on step() with with all agents' actions at once
         td_actions = tensordict.get("action").to_dict()        
-        actions = {k: v.numpy() for k, v in td_actions.items()}
-        
+        actions = {k: v.numpy() for k, v in td_actions.items()}        
+
         for _ in range(self.wrapper_frame_skip):            
             observations, rewards, dones, truncations, infos = self._env.step(actions)
 

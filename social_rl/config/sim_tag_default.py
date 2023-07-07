@@ -12,9 +12,13 @@ from torchrl.data import (
     LazyMemmapStorage
 )
 from torchrl.modules.tensordict_module.actors import (
-    Actor,
+    ProbabilisticActor,
     ValueOperator
 )
+from torchrl.data.tensor_specs import OneHotDiscreteTensorSpec
+from torchrl.modules.distributions.discrete import OneHotCategorical
+from torchrl.modules.distributions.continuous import NormalParamWrapper
+
 
 from social_rl.models.cores import MLPModule
 from social_rl.config.base_config import BaseConfig
@@ -62,15 +66,18 @@ class ActorConfig(BaseConfig):
         self.net_module = MLPModule
         self.net_kwargs = dict(
             in_features = 128,
-            out_features = 5,    # number of actions
+            out_features = 5 * 2,    # mean, std for action
             num_cells = [128, 128],    # number of hidden units in each layer
             activation_class = nn.ReLU,
-            dropout = 0.2,
             layer_class = nn.Linear
-    )        
+        )
+        self.dist_wrapper = NormalParamWrapper 
         self.in_keys = ["latent"]
-        self.out_keys = ["action"] 
-        self.wrapper_class = Actor
+        self.intermediate_keys = ["logits"]
+        self.out_keys = ["action"]
+        self.action_spec = OneHotDiscreteTensorSpec(5)
+        self.dist_class = OneHotCategorical
+        self.wrapper_class = ProbabilisticActor
 
 
 
@@ -83,10 +90,10 @@ class ValueConfig(BaseConfig):
             out_features = 1,    # value for current state
             num_cells = [128, 128],    # number of hidden units in each layer
             activation_class = nn.ReLU,
-            dropout = 0.2,
             layer_class = nn.Linear
         )
-        self.in_keys = ["obs"]
+        self.in_keys = ["latent"]
+        self.out_keys = ["state_value"]
         self.wrapper_class = ValueOperator
         
 
@@ -100,10 +107,10 @@ class QValueConfig(BaseConfig):
             out_features = 5,    # value for actionss given current state
             num_cells = [128, 128],    # number of hidden units in each layer
             activation_class = nn.ReLU,
-            dropout = 0.2,
             layer_class = nn.Linear
         )
-        self.in_keys = ['obs', 'action']
+        self.in_keys = ['latent']
+        self.out_keys = ['state_action_value']
         self.wrapper_class = ValueOperator
 
 
