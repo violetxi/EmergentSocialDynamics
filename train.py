@@ -233,17 +233,29 @@ class Trainer:
         make sure each key only has tensor value for current agent
         """
         tensordict_out = TensorDict({}, batch_size=tensordict.batch_size)
-        for key in required_keys:
+        for key in required_keys:            
             if isinstance(tensordict[key], TensorDict):
-                if key == "next":
-                    self.convert_wm_to_actor_tensordict(
+                if key == "next":                    
+                    tensordict = self.convert_wm_to_actor_tensordict(
                         tensordict[key], 
                         agent_id, 
                         required_keys=[
-                            "observation", "done", "action", "latent", "next"
+                            "observation", "done", "reward"
                         ]
                     )
-                tensordict_out[key] = tensordict.get((key, agent_id))
+                    tensordict_out[key] = tensordict
+                else:
+                    if key == "action":
+                        # convert action to one-hot vector in one line 
+                        action = tensordict.get((key, agent_id))
+                        action = torch.nn.functional.one_hot(
+                            action, 
+                            num_classes=self.env.action_spec[agent_id].space.n
+                        )
+                        tensordict_out[key] = action
+                    else:
+                        tensordict_out[key] = tensordict.get((key, agent_id))            
+
             elif isinstance(tensordict[key], torch.Tensor):
                 tensordict_out[key] = tensordict.get(key)
             else:
@@ -273,11 +285,7 @@ class Trainer:
             for agent_id, agent in self.agents.items():
                 tensordict = agent.replay_buffer_wm.sample()
                 wm_loss_dict, tensordict_wm = agent.update_wm(tensordict)
-                #tensoridct_actor = tensordict_wm.clone()
-                #agent_reward = tensordict.get(('next', 'reward', agent_id)).as_tensor()
-                #tensordict_wm.set(('next', 'reward'), agent_reward)
                 tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
-                breakpoint()
                 actor_loss_dict = agent.update_actor(tensordict_actor)
                 # log wm_dict and actor_dict
 

@@ -77,7 +77,7 @@ class VanillaAgent(BaseAgent):
         self.wm_optimizer.zero_grad()
         loss_dict, tensordict_out = self.world_model.loss(tensordict)        
         loss = loss_dict["loss"]
-        loss.backward()
+        loss.backward(retain_graph=True)
         self.wm_optimizer.step()
         return loss_dict, tensordict_out
         
@@ -92,13 +92,12 @@ class VanillaAgent(BaseAgent):
         loss_actor = tensordict["loss_actor"]
         loss_qvalue = tensordict["loss_qvalue"]
 
-        loss_actor.backward()
-        loss_qvalue.backward()
+        loss_actor.backward(retain_graph=True)
+        loss_qvalue.backward(retain_graph=True)
 
         self.actor_optimizer.step()        
         self.qvalue_optimizer.step()
         return {
             "loss_actor": loss_actor.item(),
             "loss_qvalue": loss_qvalue.item(),
-            #"loss_value": loss_value.item()
         }
