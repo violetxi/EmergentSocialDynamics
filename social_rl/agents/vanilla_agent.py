@@ -1,7 +1,7 @@
 from tensordict import TensorDict
 from torch import Tensor
 from typeguard import typechecked
-from typing import Dict, Any
+from typing import Dict
 
 import torch
 from tensordict.nn import TensorDictModule
@@ -78,11 +78,11 @@ class VanillaAgent(BaseAgent):
         loss_dict, tensordict_out = self.world_model.loss(tensordict)        
         loss = loss_dict["loss"]
         loss.backward(retain_graph=True)
-        self.wm_optimizer.step()
+        #self.wm_optimizer.step()
         return loss_dict, tensordict_out
         
 
-    def update_actor(self, tensordict: TensorDict) -> Dict[str, Any]:
+    def update_actor(self, tensordict: TensorDict) -> Dict[str, float]:
         """Update actor network
         """
         self.actor_optimizer.zero_grad()
@@ -95,8 +95,12 @@ class VanillaAgent(BaseAgent):
         loss_actor.backward(retain_graph=True)
         loss_qvalue.backward(retain_graph=True)
 
-        self.actor_optimizer.step()        
-        self.qvalue_optimizer.step()
+        print("Update world model")
+        self.wm_optimizer.step()
+        print("Update actor network")
+        self.actor_optimizer.step()  
+        print("Update qvalue network")      
+        self.qvalue_optimizer.step()        
         return {
             "loss_actor": loss_actor.item(),
             "loss_qvalue": loss_qvalue.item(),

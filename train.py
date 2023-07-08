@@ -16,7 +16,7 @@ from social_rl.utils.utils import (
     load_config_from_path,
     ensure_dir,
 )
-
+torch.autograd.set_detect_anomaly(True)
 
 
 @typechecked
