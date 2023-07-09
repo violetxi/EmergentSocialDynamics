@@ -53,9 +53,10 @@ class VanillaAgent(BaseAgent):
             self.qvalue, 
             num_actions=self.actor.spec["action"].space.n
         )
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.lr_actor)
-        #self.value_optimuzer = torch.optim.Adam(self.value.parameters(), lr=self.config.lr_value)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.lr_actor)        
         self.qvalue_optimizer = torch.optim.Adam(self.qvalue.parameters(), lr=self.config.lr_qvalue)
+        if hasattr(self, "value"):
+            self.value_optimizer = torch.optim.Adam(self.value.parameters(), lr=self.config.lr_value)
 
 
     def act(self, tensordict: TensorDict) -> Tensor:

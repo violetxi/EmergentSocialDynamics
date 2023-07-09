@@ -288,15 +288,13 @@ class Trainer:
         
             if t > 0:
                 # update wm and actor
-                for agent_id, agent in self.agents.items():
-                    
-                    tensordict_batch = agent.replay_buffer.sample()
-                    #print("obs", tensordict_batch["observation"].shape)
+                for agent_id, agent in self.agents.items():                    
+                    tensordict_batch = agent.replay_buffer.sample()                    
                     wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
                     tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
-                    #print("latent", tensordict_actor["latent"].shape)
                     actor_loss_dict = agent.update_actor_grads(tensordict_actor)
                     # log wm_dict and actor_dict
+                    breakpoint()
                 
             
 
