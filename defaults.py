@@ -9,5 +9,7 @@ DEFAULT_ARGS = {
     'episode_length': int(1e4),
     'warm_up_steps': int(1e1),
     'val_freq': 100,
+    # wandb info
+    'project_name': 'social_rl',
 }
 

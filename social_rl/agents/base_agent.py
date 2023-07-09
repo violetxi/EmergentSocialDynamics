@@ -1,7 +1,7 @@
 """Abstract base class for all agents
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from typeguard import typechecked
 
 from torch import Tensor, nn
@@ -17,34 +17,30 @@ class BaseAgent(ABC):
             self,
             agent_idx: int,
             agent_id: str,
-            actor: TensorDictModule,    # actor network
-            value: TensorDictModule,     # value network
+            actor: TensorDictModule,    # actor network            
             qvalue: TensorDictModule,    # qvalue network
             world_model: nn.Module, #TensorDictModule,   # world model
-            replay_buffer_wm: TensorDictReplayBuffer,     # replay buffer
-            replay_buffer_actor: TensorDictReplayBuffer,     # replay buffer
+            replay_buffer: TensorDictReplayBuffer,     # replay buffer
+            value: Optional[TensorDictModule] = None     # value network
         ) -> None:
         """Base agent class
         args:
             agent_idx: agent_id in multi-agent setting, interpreted as index for a list of agents
             agent_id: the same as keys used in environment            
-            actor: actor network
-            value: value network
+            actor: actor network           
             qvalue: qvalue network
             world_model: world model
-            replay_buffer_wm: replay buffer for training world model in decentralized fashion
-            replay_buffer_actor: replay buffer for training actor in centralized fashion 
-            (Different replay buffers are needed due to decentralized training paradigm and different 
-            information required to train world model and actor network, respectively)
+            replay_buffer: replay buffer for training world model in decentralized fashion            
+            value: value network is not needed when agent's action space is discrete
         """
         self.agent_idx = agent_idx
         self.agent_id = agent_id
         self.actor = actor
-        self.world_model = world_model
-        self.value = value
+        self.world_model = world_model        
         self.qvalue = qvalue
-        self.replay_buffer_wm = replay_buffer_wm
-        self.replay_buffer_actor = replay_buffer_actor
+        self.replay_buffer = replay_buffer
+        if value is not None:
+            self.value = value
 
 
     @abstractmethod

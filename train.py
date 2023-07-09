@@ -1,6 +1,11 @@
 """
 Trainer class and training loop are here
 """
+import os
+# set to false to suppress warnings about acotr and qvalue networks needs to be 
+# updated manually as we do that in the training loop
+os.environ['RL_WARNINGS']='False'
+import wandb
 import argparse
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
@@ -121,7 +126,6 @@ class Trainer:
             in_keys=actor_config.in_keys, 
             out_keys=actor_config.intermediate_keys
         )
-        #action_spec = self.env.action_spec[agent_id]
         actor = actor_config.wrapper_class(
             module=actor_module, 
             in_keys=actor_config.intermediate_keys,
@@ -129,23 +133,15 @@ class Trainer:
             spec=actor_config.action_spec,
             distribution_class=actor_config.dist_class  
         )
-
-        value_config = self.config.agent_config.value_config
-        value_module = value_config.net_module(value_config.net_kwargs)
-        # outkeys defaults to state_value with obs as inkey     
-        value = value_config.wrapper_class(
-            value_module, 
-            in_keys=value_config.in_keys,
-            out_keys=value_config.out_keys
-        ) 
+        
 
         qvalue_config = self.config.agent_config.qvalue_config
         qvalue_module = qvalue_config.net_module(qvalue_config.net_kwargs)
         # outkeys defaults to state_action_value with obs as inkey
-        qvalue = value_config.wrapper_class(
+        qvalue = qvalue_config.wrapper_class(
             qvalue_module, 
             in_keys=qvalue_config.in_keys,
-            out_keys=value_config.out_keys
+            out_keys=qvalue_config.out_keys
         )
         
         wm_config = self.config.agent_config.wm_config                
@@ -157,8 +153,20 @@ class Trainer:
         )
 
         replay_buffer_config = self.config.agent_config.replay_buffer_config        
-        replay_buffer_wm = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
-        replay_buffer_actor = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
+        replay_buffer = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
+
+        if self.config.agent_config.value_config is not None:
+            value_config = self.config.agent_config.value_config
+            value_module = value_config.net_module(value_config.net_kwargs)
+            # outkeys defaults to state_value with obs as inkey     
+            value = value_config.wrapper_class(
+                value_module, 
+                in_keys=value_config.in_keys,
+                out_keys=value_config.out_keys
+            )
+        else:
+            value = None
+
         agent = self.config.agent_config.agent_class(
             agent_idx=agent_idx, 
             agent_id=agent_id,
@@ -167,8 +175,7 @@ class Trainer:
             value=value, 
             qvalue=qvalue, 
             world_model=world_model, 
-            replay_buffer_wm=replay_buffer_wm, 
-            replay_buffer_actor=replay_buffer_actor
+            replay_buffer=replay_buffer            
         )        
         return agent
 
@@ -203,8 +210,7 @@ class Trainer:
 
             for agent_id, agent in self.agents.items():
                 if i > 0:
-                    agent.replay_buffer_wm.add(tensordict.clone())
-                    #agent.replay_buffer_actor.add(tensordict.clone())        
+                    agent.replay_buffer.add(tensordict.clone())                   
 
 
     def _step_episode(
@@ -216,7 +222,7 @@ class Trainer:
             action = agent.act(tensordict.clone())
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
-            actions[agent_id] = action
+            actions[agent_id] = action            
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict)
         tensordict["prev_action"] = deepcopy(actions)
@@ -271,23 +277,28 @@ class Trainer:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
-        for t in range(self.args.episode_length):                       
+        for t in range(self.args.episode_length):                      
             tensordict = self._step_episode(tensordict)    
             for _, agent in self.agents.items():
                 # keep adding new experience
-                agent.replay_buffer_wm.add(tensordict.clone())
-                #agent.replay_buffer_actor.add(tensordict.clone())
+                agent.replay_buffer.add(tensordict.clone())
             
             if tensordict['done'].all():
                 return
         
-            for agent_id, agent in self.agents.items():
-                tensordict = agent.replay_buffer_wm.sample()
-                wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict)
-                tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
-                actor_loss_dict = agent.update_actor_grads(tensordict_actor)
-                # log wm_dict and actor_dict
-
+            if t > 0:
+                # update wm and actor
+                for agent_id, agent in self.agents.items():
+                    
+                    tensordict_batch = agent.replay_buffer.sample()
+                    #print("obs", tensordict_batch["observation"].shape)
+                    wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
+                    tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
+                    #print("latent", tensordict_actor["latent"].shape)
+                    actor_loss_dict = agent.update_actor_grads(tensordict_actor)
+                    # log wm_dict and actor_dict
+                
+            
 
     def train(self) -> None:
         for episode in range(self.args.num_episodes): 

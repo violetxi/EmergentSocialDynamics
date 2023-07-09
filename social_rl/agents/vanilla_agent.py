@@ -1,7 +1,7 @@
 from tensordict import TensorDict
 from torch import Tensor
 from typeguard import typechecked
-from typing import Dict, List
+from typing import Dict, Optional
 
 import torch
 from tensordict.nn import TensorDictModule
@@ -23,14 +23,21 @@ class VanillaAgent(BaseAgent):
             agent_idx: int, 
             agent_id: str, 
             config: BaseConfig,
-            actor: TensorDictModule, 
-            value: TensorDictModule, 
+            actor: TensorDictModule,             
             qvalue: TensorDictModule, 
             world_model: TensorDictModule, 
-            replay_buffer_wm: TensorDictReplayBuffer, 
-            replay_buffer_actor: TensorDictReplayBuffer
+            replay_buffer: TensorDictReplayBuffer,
+            value: Optional[TensorDictModule] = None
         ) -> None:
-        super().__init__(agent_idx, agent_id, actor, value, qvalue, world_model, replay_buffer_wm, replay_buffer_actor)
+        super().__init__(
+            agent_idx, 
+            agent_id, 
+            actor,              
+            qvalue, 
+            world_model, 
+            replay_buffer,
+            value=value
+            )
         self.config = config
         self.prep_optimization()    # initialize loss criterion and optimizer for world model and acotr network
 
@@ -41,7 +48,6 @@ class VanillaAgent(BaseAgent):
         """        
         self.wm_optimizer = torch.optim.Adam(self.world_model.parameters(), lr=self.config.lr_wm)
         
-        #self.sac_loss = SACLoss(self.actor, self.qvalue, self.value)
         self.sac_loss = DiscreteSACLoss(
             self.actor, 
             self.qvalue, 

@@ -6,6 +6,7 @@ both will provide the full configuration for the experiment.
 import argparse
 import torch.nn as nn
 from typeguard import typechecked
+from typing import Optional
 
 from torchrl.data import (
     TensorDictReplayBuffer, 
@@ -65,9 +66,9 @@ class ActorConfig(BaseConfig):
     def __init__(self) -> None:
         self.net_module = MLPModule
         self.net_kwargs = dict(
-            in_features = 128,
+            in_features = 64,
             out_features = 5 * 2,    # mean, std for action
-            num_cells = [128, 128],    # number of hidden units in each layer
+            num_cells = [64, 64],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )
@@ -82,35 +83,23 @@ class ActorConfig(BaseConfig):
 
 
 @typechecked
-class ValueConfig(BaseConfig):
-    def __init__(self) -> None:
-        self.net_module = MLPModule
-        self.net_kwargs = dict(
-            in_features = 128,    # use latent representation from world model
-            out_features = 1,    # value for current state
-            num_cells = [128, 128],    # number of hidden units in each layer
-            activation_class = nn.ReLU,
-            layer_class = nn.Linear
-        )
-        self.in_keys = ["latent"]
-        self.out_keys = ["state_value"]
-        self.wrapper_class = ValueOperator
-        
-
-
-@typechecked
 class QValueConfig(BaseConfig):
+    """ Configuration for the Q-value network. 
+        - Using MLPModule from torchrl
+        - Using ValueOperator from torchrl
+        - DiscreteSAC by default look for 'state_value' outkey        
+    """
     def __init__(self) -> None:
         self.net_module = MLPModule
         self.net_kwargs = dict(
-            in_features = 128,    # use latent representation from world model
+            in_features = 64,    # use latent representation from world model
             out_features = 5,    # value for actionss given current state
-            num_cells = [128, 128],    # number of hidden units in each layer
+            num_cells = [64, 64],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )
         self.in_keys = ['latent']
-        self.out_keys = ['state_action_value']
+        self.out_keys = ['state_value']
         self.wrapper_class = ValueOperator
 
 
@@ -145,26 +134,26 @@ class WmConfig(BaseConfig):
     def __init__(self) -> None:
         self.backbone_kwargs = dict(
             in_features=32+5,    # observation + action
-            out_features=128,
-            num_cells=[128, 128],
+            out_features=64,
+            num_cells=[64, 64],
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,
             device="cpu",
         )
         self.obs_head_kwargs = dict(
-            in_features=128,
+            in_features=64,
             out_features=32,
-            num_cells=[128, 128],
+            num_cells=[64, 64],
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,
             device="cpu",
         )
         self.action_head_kwargs = dict(
-            in_features=128,
+            in_features=64,
             out_features=5,
-            num_cells=[128, 128],
+            num_cells=[64, 64],
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,
@@ -182,23 +171,23 @@ class WmConfig(BaseConfig):
 class AgentConfig(BaseConfig):
     def __init__(
             self,
-            actor_config: BaseConfig,
-            value_config: BaseConfig,
+            actor_config: BaseConfig,            
             qvalue_config: BaseConfig,
             wm_config: BaseConfig,
-            replay_buffer_config: BaseConfig
+            replay_buffer_config: BaseConfig,
+            value_config: Optional[BaseConfig] = None
         ) -> None:
         self.num_good = 4
         self.num_adversaries = 4
         self.num_agents = self.num_good + self.num_adversaries
         self.actor_config = actor_config
-        self.lr_actor = 1e-3
+        self.lr_actor = 1e-6
         self.value_config = value_config
-        self.lr_value = 1e-3
+        self.lr_value = 1e-6
         self.qvalue_config = qvalue_config
-        self.lr_qvalue = 1e-3
+        self.lr_qvalue = 1e-6
         self.wm_config = wm_config
-        self.lr_wm = 1e-3
+        self.lr_wm = 1e-6
         self.replay_buffer_config = replay_buffer_config
         self.agent_class = VanillaAgent
 
@@ -211,13 +200,11 @@ class Config(BaseConfig):
             args: argparse.Namespace) -> None:
         self.exp_config = ExpConfig(args)
         wm_config = WmConfig()
-        actor_config = ActorConfig()
-        value_config = ValueConfig()
+        actor_config = ActorConfig()        
         qvalue_config = QValueConfig()
         replay_buffer_config = ReplayBufferConfig(self.exp_config)
         self.agent_config = AgentConfig(
             actor_config,
-            value_config,
             qvalue_config,
             wm_config,
             replay_buffer_config
