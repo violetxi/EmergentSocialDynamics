@@ -53,6 +53,8 @@ def gym_to_torchrl_spec_transform(
     which_gym: str = 'gymnasium',
 ) -> TensorSpec:
     """Maps the gym specs to the TorchRL specs.
+    Adapted from 
+    https://github.com/pytorch/rl/blob/771ef814f98b30dbe0e1b7acb2625a0bf16a1e08/torchrl/envs/libs/gym.py#L181
 
     By convention, 'state' keys of Dict specs will be renamed "observation" to match the
     default TorchRL keys.

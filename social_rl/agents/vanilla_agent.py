@@ -1,7 +1,7 @@
 from tensordict import TensorDict
 from torch import Tensor
 from typeguard import typechecked
-from typing import Dict
+from typing import Dict, List
 
 import torch
 from tensordict.nn import TensorDictModule
@@ -26,7 +26,7 @@ class VanillaAgent(BaseAgent):
             actor: TensorDictModule, 
             value: TensorDictModule, 
             qvalue: TensorDictModule, 
-            world_model: torch.nn.Module, #TensorDictModule, 
+            world_model: TensorDictModule, 
             replay_buffer_wm: TensorDictReplayBuffer, 
             replay_buffer_actor: TensorDictReplayBuffer
         ) -> None:
@@ -53,7 +53,6 @@ class VanillaAgent(BaseAgent):
 
 
     def act(self, tensordict: TensorDict) -> Tensor:
-
         # initial time step in the episode tensordict only has initial observation 
         # agent takes random action
         if "action" not in tensordict.keys():
@@ -68,8 +67,8 @@ class VanillaAgent(BaseAgent):
             return tensordict_out["action"]
     
 
-    def update_wm(self, tensordict: TensorDict) -> tuple[
-        Dict[str, torch.Tensor],
+    def update_wm_grads(self, tensordict: TensorDict) -> tuple[
+        Dict[str, float],
         TensorDict
         ]:
         """Update world model
@@ -78,11 +77,12 @@ class VanillaAgent(BaseAgent):
         loss_dict, tensordict_out = self.world_model.loss(tensordict)        
         loss = loss_dict["loss"]
         loss.backward(retain_graph=True)
-        #self.wm_optimizer.step()
+        for k, v in loss_dict.items():
+            loss_dict[k] = v.item()
         return loss_dict, tensordict_out
         
 
-    def update_actor(self, tensordict: TensorDict) -> Dict[str, float]:
+    def update_actor_grads(self, tensordict: TensorDict) -> Dict[str, float]:
         """Update actor network
         """
         self.actor_optimizer.zero_grad()
@@ -93,15 +93,27 @@ class VanillaAgent(BaseAgent):
         loss_qvalue = tensordict["loss_qvalue"]
 
         loss_actor.backward(retain_graph=True)
-        loss_qvalue.backward(retain_graph=True)
+        loss_qvalue.backward(retain_graph=True)        
 
-        print("Update world model")
-        self.wm_optimizer.step()
-        print("Update actor network")
-        self.actor_optimizer.step()  
-        print("Update qvalue network")      
-        self.qvalue_optimizer.step()        
         return {
-            "loss_actor": loss_actor.item(),
-            "loss_qvalue": loss_qvalue.item(),
+            "actor_loss": loss_actor.item(),
+            "qvalue_loss": loss_qvalue.item(),
         }
+    
+
+    def set_train(self) -> None:
+        self.world_model.train()
+        self.actor.train()
+        self.qvalue.train()
+
+    
+    def set_eval(self) -> None:
+        self.world_model.eval()
+        self.actor.eval()
+        self.qvalue.eval()
+
+
+    def step_optimizer(self) -> None:
+        self.wm_optimizer.step()
+        self.actor_optimizer.step()
+        self.qvalue_optimizer.step()

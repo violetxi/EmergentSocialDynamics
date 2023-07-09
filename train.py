@@ -261,14 +261,13 @@ class Trainer:
             else:
                 raise NotImplementedError(f"Type of {key} is {type(tensordict[key])} which is not supported")
             
-        return tensordict_out
-        
+        return tensordict_out        
 
 
     def train_episode(
         self, 
         tensordict: TensorDict
-    ) -> None:
+        ) -> None:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
@@ -284,9 +283,9 @@ class Trainer:
         
             for agent_id, agent in self.agents.items():
                 tensordict = agent.replay_buffer_wm.sample()
-                wm_loss_dict, tensordict_wm = agent.update_wm(tensordict)
+                wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict)
                 tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
-                actor_loss_dict = agent.update_actor(tensordict_actor)
+                actor_loss_dict = agent.update_actor_grads(tensordict_actor)
                 # log wm_dict and actor_dict
 
 
