@@ -55,8 +55,8 @@ def parse_args() -> argparse.Namespace:
         help='Total number of episodes to train on'
     )
     parser.add_argument(
-        '--episode_length', type=int,
-        default=DEFAULT_ARGS['episode_length'],
+        '--max_episode_len', type=int,
+        default=DEFAULT_ARGS['max_episode_len'],
         help='Max number of steps per episode'
     )
     parser.add_argument(
@@ -312,7 +312,7 @@ class Trainer:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
-        for t in tqdm(range(self.args.episode_length)):
+        for t in tqdm(range(self.args.max_episode_len)):
             tensordict = tensordict.to(self.device)                 
             tensordict = self._step_episode(tensordict)
             for _, agent in self.agents.items():

@@ -36,7 +36,8 @@ from social_rl.agents.vanilla_agent import VanillaAgent
 class ExpConfig(BaseConfig):
     def __init__(
             self, 
-            args: argparse.Namespace) -> None:
+            args: argparse.Namespace
+            ) -> None:
         for attr in vars(args):
             setattr(self, attr, getattr(args, attr))
         # @TODO: this will be changed after moving this to a server
@@ -46,7 +47,11 @@ class ExpConfig(BaseConfig):
 
 @typechecked
 class EnvConfig(BaseConfig):
-    def __init__(self, actor_config: BaseConfig) -> None:
+    def __init__(
+            self, 
+            actor_config: BaseConfig,
+            args: argparse.Namespace
+            ) -> None:
         self.env_name = "mpe"
         self.task_name = "simple_tag_v3"
         self.env_class = PettingZooMPEBase        
@@ -54,7 +59,7 @@ class EnvConfig(BaseConfig):
             num_good=actor_config.num_good,
             num_adversaries=actor_config.num_adversaries,
             num_obstacles=3, 
-            max_cycles=25, 
+            max_cycles=args.max_episode_len, 
             continuous_actions=False
         )
 
@@ -181,13 +186,13 @@ class AgentConfig(BaseConfig):
         self.num_adversaries = 4
         self.num_agents = self.num_good + self.num_adversaries
         self.actor_config = actor_config
-        self.lr_actor = 1e-6
+        self.lr_actor = 1e-4
         self.value_config = value_config
-        self.lr_value = 1e-6
+        self.lr_value = 1e-4
         self.qvalue_config = qvalue_config
-        self.lr_qvalue = 1e-6
+        self.lr_qvalue = 1e-4
         self.wm_config = wm_config
-        self.lr_wm = 1e-6
+        self.lr_wm = 1e-4
         self.replay_buffer_config = replay_buffer_config
         self.agent_class = VanillaAgent
 
@@ -209,4 +214,4 @@ class Config(BaseConfig):
             wm_config,
             replay_buffer_config
         )
-        self.env_config = EnvConfig(self.agent_config)        
+        self.env_config = EnvConfig(self.agent_config, args)        
