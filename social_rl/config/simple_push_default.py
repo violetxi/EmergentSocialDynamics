@@ -53,12 +53,9 @@ class EnvConfig(BaseConfig):
             args: argparse.Namespace
             ) -> None:
         self.env_name = "mpe"
-        self.task_name = "simple_tag_v3"
+        self.task_name = "simple_push_v3"
         self.env_class = PettingZooMPEBase        
         self.env_kwargs = dict(
-            num_good=agent_config.num_good,
-            num_adversaries=agent_config.num_adversaries,
-            num_obstacles=3, 
             max_cycles=args.max_episode_len, 
             continuous_actions=False
         )
@@ -138,7 +135,7 @@ class ReplayBufferConfig(BaseConfig):
 class WmConfig(BaseConfig):
     def __init__(self) -> None:
         self.backbone_kwargs = dict(
-            in_features=32+5,    # observation + action
+            in_features=19+5,    # observation + action
             out_features=128,
             num_cells=[128, 128],
             activation_class=nn.ReLU,
@@ -148,7 +145,7 @@ class WmConfig(BaseConfig):
         )
         self.obs_head_kwargs = dict(
             in_features=128,
-            out_features=32,
+            out_features=19,
             num_cells=[128, 128],
             activation_class=nn.ReLU,
             dropout=0.2,
@@ -182,9 +179,7 @@ class AgentConfig(BaseConfig):
             replay_buffer_config: BaseConfig,
             value_config: Optional[BaseConfig] = None
         ) -> None:
-        self.num_good = 4
-        self.num_adversaries = 4
-        self.num_agents = self.num_good + self.num_adversaries
+        self.num_agents = 2
         self.actor_config = actor_config
         self.lr_actor = 1e-4
         self.value_config = value_config

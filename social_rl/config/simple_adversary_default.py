@@ -1,7 +1,9 @@
-""" Default configuration for simple_tag_v3 environment. Using .py file because it's easier to 
+""" Default configuration for simple_adversary_v3 environment. Using .py file because it's easier to 
 pass around python objects (e.g. class Config) than json/yaml files.
 Storage suggestion: store args information in a json file, along with the config.py file path, combining 
 both will provide the full configuration for the experiment.
+@TODO There seem to be one hard-coded adversary agent in this setting, need to update the 
+infrastructure to support hardcoded adversary agents.
 """
 import argparse
 import torch.nn as nn
@@ -40,9 +42,6 @@ class ExpConfig(BaseConfig):
             ) -> None:
         for attr in vars(args):
             setattr(self, attr, getattr(args, attr))
-        # @TODO: this will be changed after moving this to a server
-        # identify the device to use in train.py then add it to namespacec args
-        self.device = "cpu"
 
 
 @typechecked
@@ -53,15 +52,13 @@ class EnvConfig(BaseConfig):
             args: argparse.Namespace
             ) -> None:
         self.env_name = "mpe"
-        self.task_name = "simple_tag_v3"
+        self.task_name = "simple_adversary_v3"
         self.env_class = PettingZooMPEBase        
         self.env_kwargs = dict(
-            num_good=agent_config.num_good,
-            num_adversaries=agent_config.num_adversaries,
-            num_obstacles=3, 
+            N=agent_config.num_agents - 1,    # by default there's an adversary agent
             max_cycles=args.max_episode_len, 
             continuous_actions=False
-        )
+            )
 
 
 
@@ -77,7 +74,7 @@ class ActorConfig(BaseConfig):
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )
-        self.dist_wrapper = NormalParamWrapper 
+        self.dist_wrapper = NormalParamWrapper
         self.in_keys = ["latent"]
         self.intermediate_keys = ["logits"]
         self.out_keys = ["action"]
@@ -125,11 +122,11 @@ class ReplayBufferConfig(BaseConfig):
         storage = LazyMemmapStorage(
             max_size=1e6,
             scratch_dir=exp_config.log_dir,
-            device=exp_config.device,
+            device="cpu"
         )
         self.buffer_kwargs = dict(
             batch_size=self.batch_size,
-            storage=storage            
+            storage=storage
         )
 
 
@@ -138,7 +135,7 @@ class ReplayBufferConfig(BaseConfig):
 class WmConfig(BaseConfig):
     def __init__(self) -> None:
         self.backbone_kwargs = dict(
-            in_features=32+5,    # observation + action
+            in_features=14+5,    # observation + action
             out_features=128,
             num_cells=[128, 128],
             activation_class=nn.ReLU,
@@ -148,7 +145,7 @@ class WmConfig(BaseConfig):
         )
         self.obs_head_kwargs = dict(
             in_features=128,
-            out_features=32,
+            out_features=14,
             num_cells=[128, 128],
             activation_class=nn.ReLU,
             dropout=0.2,
@@ -181,10 +178,8 @@ class AgentConfig(BaseConfig):
             wm_config: BaseConfig,
             replay_buffer_config: BaseConfig,
             value_config: Optional[BaseConfig] = None
-        ) -> None:
-        self.num_good = 4
-        self.num_adversaries = 4
-        self.num_agents = self.num_good + self.num_adversaries
+        ) -> None:        
+        self.num_agents = 4
         self.actor_config = actor_config
         self.lr_actor = 1e-4
         self.value_config = value_config
