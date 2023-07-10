@@ -176,9 +176,11 @@ def convert_tensordict_to_tensor(
         one-hot encoding for actions
     Returns:
         tensor_out (torch.Tensor): a tensor of the input (N, B, D)
-    """
+    """        
     if isinstance(tensordict[list(tensordict.keys())[0]], td.MemmapTensor):
         # if input contains memmap, convert to tensor
+        # as_tensor can only be called on tensors on cpu
+        tensordict = tensordict.cpu()
         for k, v in tensordict.items():
             tensordict[k] = v.as_tensor()
 

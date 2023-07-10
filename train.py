@@ -7,10 +7,12 @@ import os
 os.environ['RL_WARNINGS']='False'
 import wandb
 import argparse
+import datetime
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
 from typing import List
 from copy import deepcopy
+from tqdm import tqdm
 
 import torch
 from tensordict import TensorDict
@@ -48,11 +50,6 @@ def parse_args() -> argparse.Namespace:
         help='Batch size'
     )
     parser.add_argument(
-        '--epochs', type=int,
-        default=DEFAULT_ARGS['epochs'],
-        help='Number of epochs to train for'
-    )
-    parser.add_argument(
         '--num_episodes', type=int, 
         default=DEFAULT_ARGS['num_episodes'],
         help='Total number of episodes to train on'
@@ -72,6 +69,11 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_ARGS['val_freq'],
         help='Validation frequency'
     )
+    parser.add_argument(
+        '--project_name', type=str,
+        default=DEFAULT_ARGS['project_name'],
+        help='Name of the project for wandb'
+    )
     args = parser.parse_args()
     return args
 
@@ -82,13 +84,25 @@ class Trainer:
     def __init__(
         self, 
         args: argparse.Namespace
-    ) -> None:
+    ) -> None:        
         self.args = args
-        ensure_dir(args.log_dir)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        ensure_dir(args.log_dir)        
         self.config = load_config_from_path(args.config_path, args)
         self._init_env(args.seed)
         self._init_agents()
         self._init_buffer()
+        self._init_wandb()            
+
+
+    def _init_wandb(self) -> None:
+        cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        run_name = f"{os.path.basename(self.args.config_path).split('.')[0]}_{cur_time}"
+        wandb.init(
+            project=self.args.project_name, 
+            config=args.__dict__,
+            name=run_name
+            )
 
 
     def _init_env(
@@ -97,14 +111,12 @@ class Trainer:
     ) -> None:
         env_config = self.config.env_config
         self.env_name = env_config.env_name
-        env_class = env_config.env_class
-        # @TODO: change device after servers are back online
+        env_class = env_config.env_class        
         # Do not use batch_size for environment
         kwargs = {
-            "device": "cpu"
+            "device": self.device,
         }
         self.env = env_class(seed, env_config, kwargs)
-        # self.env = env_class(seed, env_config)
         print(f"Finished initializing {self.env_name} environment")
 
 
@@ -133,7 +145,7 @@ class Trainer:
             spec=actor_config.action_spec,
             distribution_class=actor_config.dist_class  
         )
-        
+        actor = actor.to(self.device)
 
         qvalue_config = self.config.agent_config.qvalue_config
         qvalue_module = qvalue_config.net_module(qvalue_config.net_kwargs)
@@ -143,6 +155,7 @@ class Trainer:
             in_keys=qvalue_config.in_keys,
             out_keys=qvalue_config.out_keys
         )
+        qvalue = qvalue.to(self.device)
         
         wm_config = self.config.agent_config.wm_config                
         wm_module = wm_config.wm_module_cls(agent_idx, wm_config)        
@@ -151,6 +164,7 @@ class Trainer:
             wm_config.in_keys, 
             wm_config.out_keys
         )
+        world_model = world_model.to(self.device)
 
         replay_buffer_config = self.config.agent_config.replay_buffer_config        
         replay_buffer = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
@@ -164,6 +178,7 @@ class Trainer:
                 in_keys=value_config.in_keys,
                 out_keys=value_config.out_keys
             )
+            value = value.to(self.device)
         else:
             value = None
 
@@ -204,9 +219,9 @@ class Trainer:
         tensordict = self.env.reset()
         print(f"Starting warm-up steps for {self.args.warm_up_steps} steps")
 
-        for i in range(self.args.warm_up_steps):
-            print(f"Warm-up step {i}")
-            tensordict = self._step_episode(tensordict)
+        for i in tqdm(range(self.args.warm_up_steps)):
+            tensordict = tensordict.to(self.device)
+            tensordict = self._step_episode(tensordict)            
 
             for agent_id, agent in self.agents.items():
                 if i > 0:
@@ -217,14 +232,14 @@ class Trainer:
         self, 
         tensordict: TensorDict
     ) -> TensorDict:        
-        actions = {}           
-        for agent_id, agent in self.agents.items():
+        actions = {}  
+        for agent_id, agent in self.agents.items(): 
             action = agent.act(tensordict.clone())
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
             actions[agent_id] = action            
         tensordict["action"] = deepcopy(actions)
-        tensordict = self.env.step(tensordict)
+        tensordict = self.env.step(tensordict.detach().cpu())        
         tensordict["prev_action"] = deepcopy(actions)
         return tensordict
 
@@ -277,8 +292,9 @@ class Trainer:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
-        for t in range(self.args.episode_length):                      
-            tensordict = self._step_episode(tensordict)    
+        for t in tqdm(range(self.args.episode_length)):
+            tensordict = tensordict.to(self.device)                 
+            tensordict = self._step_episode(tensordict)
             for _, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
@@ -289,17 +305,21 @@ class Trainer:
             if t > 0:
                 # update wm and actor
                 for agent_id, agent in self.agents.items():                    
-                    tensordict_batch = agent.replay_buffer.sample()                    
+                    tensordict_batch = agent.replay_buffer.sample().to(self.device)                
                     wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
                     tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
                     actor_loss_dict = agent.update_actor_grads(tensordict_actor)
                     # log wm_dict and actor_dict
-                    breakpoint()
-                
+                    for key, value in wm_loss_dict.items():
+                        wandb.log({f"{agent_id}_wm_{key}": value})
+                    for key, value in actor_loss_dict.items():
+                        wandb.log({f"{agent_id}_actor_{key}": value})                 
+                    # log reward
+                    wandb.log({f"{agent_id}_reward": tensordict_actor.get(('next', 'reward')).mean()})
             
 
     def train(self) -> None:
-        for episode in range(self.args.num_episodes): 
+        for episode in tqdm(range(self.args.num_episodes)): 
             tensordict = self.env.reset()           
             self.train_episode(tensordict)
 

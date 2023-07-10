@@ -37,7 +37,7 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         assert action_dim == self.config.backbone_kwargs["in_features"] \
             - self.config.obs_head_kwargs["out_features"], \
             "action_dim must be equal to the difference between backbone in_features and obs_head out_features"
-        super().__init__(backbone, obs_head, action_head, action_dim=action_dim)
+        super().__init__(backbone, obs_head, action_head, action_dim=action_dim)        
 
 
     def forward_backbone(
@@ -57,7 +57,6 @@ class MLPDynamicsModel(ForwardDynamicsModelBase):
         #print("obs.shape", obs.shape, "action.shape", action.shape)
         assert len(obs.shape) == len(action.shape), \
             "obs and action must have same number of dimensions"
-        
         return self.backbone(torch.cat([obs, action], dim=-1))
 
 
@@ -215,14 +214,22 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
             Output tensor dictionary.
         """        
         if tensordict_out is None:
-            tensordict_out = tensordict.clone()    #TensorDict({}, batch_size=tensordict.batch_size, device=tensordict.device)                    
+            tensordict_out = tensordict.clone()
 
         # obs: torch.Tensor, actions: torch.Tensor, 
         # prev_actions: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:        
-        obs = convert_tensordict_to_tensor(tensordict.get('observation'), "obs")
-        next_obs = convert_tensordict_to_tensor(tensordict.get(('next', 'observation')), "obs")
-        action = convert_tensordict_to_tensor(tensordict.get('action'), "action", self.module.action_dim)
-        prev_action= convert_tensordict_to_tensor(tensordict.get('prev_action'), "action", self.action_dim)
+        obs = convert_tensordict_to_tensor(
+            tensordict.get('observation'), "obs"
+            ).to(tensordict.device)
+        next_obs = convert_tensordict_to_tensor(
+            tensordict.get(('next', 'observation')), "obs"
+            ).to(tensordict.device)
+        action = convert_tensordict_to_tensor(
+            tensordict.get('action'), "action", self.module.action_dim
+            ).to(tensordict.device)
+        prev_action= convert_tensordict_to_tensor(
+            tensordict.get('prev_action'), "action", self.action_dim
+            ).to(tensordict.device)
         wm_dict = self.module(obs, action, prev_action, next_obs)
 
         assert list(wm_dict.keys()) == self.out_keys, \

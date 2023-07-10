@@ -68,7 +68,7 @@ class VanillaAgent(BaseAgent):
             return action
         else:
             # after initial time step, agent uses world model to predict next state
-            # at this point tensordict has observation, action, next_obs, next_action, prev_action                
+            # at this point tensordict has observation, action, next_obs, next_action, prev_action
             tensordict_wm = self.world_model(tensordict)
             tensordict_out = self.actor(tensordict_wm)
             return tensordict_out["action"]
