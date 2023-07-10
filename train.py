@@ -314,10 +314,12 @@ class Trainer:
         """
         for t in tqdm(range(self.args.max_episode_len)):
             tensordict = tensordict.to(self.device)                 
-            tensordict = self._step_episode(tensordict)
-            for _, agent in self.agents.items():
+            tensordict = self._step_episode(tensordict)            
+            for agent_id, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
+                # log reward
+                wandb.log({f"{agent_id}_reward": tensordict_actor.get(('next', 'reward', agent_id))})
             
             if tensordict['done'].all():
                 return
@@ -334,9 +336,7 @@ class Trainer:
                     for key, value in wm_loss_dict.items():
                         wandb.log({f"{agent_id}_wm_{key}": value})
                     for key, value in actor_loss_dict.items():
-                        wandb.log({f"{agent_id}_{key}": value})                 
-                    # log reward
-                    wandb.log({f"{agent_id}_reward": tensordict_actor.get(('next', 'reward')).mean()})
+                        wandb.log({f"{agent_id}_{key}": value})
         
         for agent_id, agent in self.agents.items():
             model_save_path = f"{self.checkpoint_dir}/{agent_id}_ep{episode}_model_weights.pth"
