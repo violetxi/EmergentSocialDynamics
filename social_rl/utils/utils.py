@@ -35,6 +35,7 @@ def load_config_from_path(path: str, args: argparse.Namespace) -> BaseConfig:
     config = __import__(config_path, fromlist=['*'])
     return config.Config(args)
     
+    
 
 @typechecked
 def ensure_dir(directory: str) -> None:

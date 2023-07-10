@@ -66,9 +66,9 @@ class ActorConfig(BaseConfig):
     def __init__(self) -> None:
         self.net_module = MLPModule
         self.net_kwargs = dict(
-            in_features = 64,
+            in_features = 128,
             out_features = 5 * 2,    # mean, std for action
-            num_cells = [64, 64],    # number of hidden units in each layer
+            num_cells = [128, 128],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )
@@ -92,9 +92,9 @@ class QValueConfig(BaseConfig):
     def __init__(self) -> None:
         self.net_module = MLPModule
         self.net_kwargs = dict(
-            in_features = 64,    # use latent representation from world model
+            in_features = 128,    # use latent representation from world model
             out_features = 5,    # value for actionss given current state
-            num_cells = [64, 64],    # number of hidden units in each layer
+            num_cells = [128, 128],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )
@@ -134,26 +134,26 @@ class WmConfig(BaseConfig):
     def __init__(self) -> None:
         self.backbone_kwargs = dict(
             in_features=32+5,    # observation + action
-            out_features=64,
-            num_cells=[64, 64],
+            out_features=128,
+            num_cells=[128, 128],
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,
             device="cpu",
         )
         self.obs_head_kwargs = dict(
-            in_features=64,
+            in_features=128,
             out_features=32,
-            num_cells=[64, 64],
+            num_cells=[128, 128],
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,
             device="cpu",
         )
         self.action_head_kwargs = dict(
-            in_features=64,
+            in_features=128,
             out_features=5,
-            num_cells=[64, 64],
+            num_cells=[128, 128],
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,

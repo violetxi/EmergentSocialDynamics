@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from typeguard import typechecked
 
+import torch
 from torch import Tensor, nn
 from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
@@ -41,6 +42,16 @@ class BaseAgent(ABC):
         self.replay_buffer = replay_buffer
         if value is not None:
             self.value = value
+
+
+    def save_model_weights(self, path):
+        torch.save({
+            'actor_state_dict': self.actor.state_dict(),
+            'qvalue_state_dict': self.qvalue.state_dict(),
+            'world_model_state_dict': self.world_model.state_dict(),
+            # Uncomment the next line if your agents have a value network
+            'value_state_dict': self.value.state_dict() if hasattr(self, "value") else None
+        }, path)
 
 
     @abstractmethod

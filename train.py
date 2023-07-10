@@ -86,14 +86,33 @@ class Trainer:
         args: argparse.Namespace
     ) -> None:        
         self.args = args
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        ensure_dir(args.log_dir)        
+        self._init_log_dir()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")        
         self.config = load_config_from_path(args.config_path, args)
         self._init_env(args.seed)
         self._init_agents()
         self._init_buffer()
-        self._init_wandb()            
+        self._init_wandb()        
 
+
+    def _init_log_dir(self) -> None:
+        """Initialize log directory to save buffer, checkpoints, and logs
+        By default, log_dir is ./logs/ and the name of the log directory is
+        the name of the config file without the extension
+        """
+        if self.args.log_dir == DEFAULT_ARGS['log_dir']:
+            self.args.log_dir = os.path.join(
+                self.args.log_dir, 
+                os.path.basename(self.args.config_path).split('.')[0]
+                )                 
+        ensure_dir(self.args.log_dir)
+        
+        self.checkpoint_dir = os.path.join(
+            self.args.log_dir,            
+            'checkpoints'
+            )
+        ensure_dir(self.checkpoint_dir)
+        
 
     def _init_wandb(self) -> None:
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -286,7 +305,8 @@ class Trainer:
 
 
     def train_episode(
-        self, 
+        self,
+        episode: int,
         tensordict: TensorDict
         ) -> None:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
@@ -309,19 +329,24 @@ class Trainer:
                     wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
                     tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
                     actor_loss_dict = agent.update_actor_grads(tensordict_actor)
+                    agent.step_optimizer()
                     # log wm_dict and actor_dict
                     for key, value in wm_loss_dict.items():
                         wandb.log({f"{agent_id}_wm_{key}": value})
                     for key, value in actor_loss_dict.items():
-                        wandb.log({f"{agent_id}_actor_{key}": value})                 
+                        wandb.log({f"{agent_id}_{key}": value})                 
                     # log reward
                     wandb.log({f"{agent_id}_reward": tensordict_actor.get(('next', 'reward')).mean()})
+        
+        for agent_id, agent in self.agents.items():
+            model_save_path = f"{self.checkpoint_dir}/{agent_id}_ep{episode}_model_weights.pth"
+            agent.save_model_weights(model_save_path)
             
 
     def train(self) -> None:
         for episode in tqdm(range(self.args.num_episodes)): 
             tensordict = self.env.reset()           
-            self.train_episode(tensordict)
+            self.train_episode(episode, tensordict)
 
 
 
