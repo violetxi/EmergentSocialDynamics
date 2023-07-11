@@ -127,8 +127,8 @@ class Trainer:
     def _init_wandb(self) -> None:
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         run_name = f"{os.path.basename(self.args.config_path).split('.')[0]}"
-        run_name += self.postfix
-        run_name += f"-{cur_time}"
+        run_name += self.postfix   
+        run_name += f":{cur_time}"
         wandb.init(
             project=self.args.project_name, 
             config=args.__dict__,
