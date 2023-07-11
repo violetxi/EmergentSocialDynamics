@@ -54,6 +54,16 @@ class BaseAgent(ABC):
         }, path)
 
 
+    def load_model_weights(self, path):
+        checkpoint = torch.load(path)
+        self.actor.load_state_dict(checkpoint['actor_state_dict'])
+        self.qvalue.load_state_dict(checkpoint['qvalue_state_dict'])
+        self.world_model.load_state_dict(checkpoint['world_model_state_dict'])
+        # Uncomment the next line if your agents have a value network
+        if hasattr(self, "value"):
+            self.value.load_state_dict(checkpoint['value_state_dict'])
+        
+
     @abstractmethod
     def prep_optimization(seslf) -> None:
         """Each agent gets its own loss criterion and optimizer for world model 

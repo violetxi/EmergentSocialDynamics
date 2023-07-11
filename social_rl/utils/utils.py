@@ -20,6 +20,7 @@ from torchrl.data.tensor_specs import (
 from torchrl.data.utils import numpy_to_torch_dtype_dict
 
 from social_rl.config.base_config import BaseConfig
+from social_rl.agents.base_agent import BaseAgent
 
 
 
@@ -212,3 +213,5 @@ def convert_tensordict_to_tensor(
         raise NotImplementedError(f"Conversion for td_type {td_type} not implemented")
         
     return tensor_out
+
+

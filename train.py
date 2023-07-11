@@ -139,7 +139,7 @@ class Trainer:
     def _init_env(
         self, 
         seed: int
-    ) -> None:
+        ) -> None:
         env_config = self.config.env_config
         self.env_name = env_config.env_name
         env_class = env_config.env_class        
@@ -226,9 +226,7 @@ class Trainer:
         return agent
 
 
-    def _init_agents(
-        self
-    ) -> None:
+    def _init_agents(self) -> None:
         agent_config = self.config.agent_config
         agent_ids = self.env._env.agents    # get agent ids from env
         assert len(agent_ids) == agent_config.num_agents, \
@@ -285,7 +283,7 @@ class Trainer:
         make sure each key only has tensor value for current agent
         """
         tensordict_out = TensorDict({}, batch_size=tensordict.batch_size)
-        for key in required_keys:            
+        for key in required_keys:
             if isinstance(tensordict[key], TensorDict):
                 if key == "next":                    
                     tensordict = self.convert_wm_to_actor_tensordict(

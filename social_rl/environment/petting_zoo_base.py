@@ -131,7 +131,9 @@ class PettingZooMPEBase(_EnvWrapper):
         self.action_spec = action_spec
 
         observation_spaces = {
-            'observation': {agent : env.observation_space(agent) for agent in env.possible_agents}
+            'observation': {
+                agent : env.observation_space(agent) for agent in env.possible_agents
+                }
         }        
         observation_spec = gym_to_torchrl_spec_transform(
             observation_spaces,
@@ -156,3 +158,7 @@ class PettingZooMPEBase(_EnvWrapper):
         reward_spec = reward_spec.unsqueeze(0) # add batch dim
         self.reward_spec = reward_spec
 
+
+    def render(self):
+        """Return rendered rgb_array"""
+        return self._env.render()
