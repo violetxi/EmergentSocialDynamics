@@ -95,16 +95,26 @@ class Trainer:
         self._init_wandb()        
 
 
+    def _init_save_postfix(self) -> str:
+        postfix = ""
+        for arg, default_value in DEFAULT_ARGS.items():
+            current_value = getattr(args, arg)
+            if current_value != default_value:
+                postfix += f'-{arg}_{current_value}'
+        return postfix
+    
+
     def _init_log_dir(self) -> None:
         """Initialize log directory to save buffer, checkpoints, and logs
         By default, log_dir is ./logs/ and the name of the log directory is
         the name of the config file without the extension
         """
-        if self.args.log_dir == DEFAULT_ARGS['log_dir']:
-            self.args.log_dir = os.path.join(
-                self.args.log_dir, 
-                os.path.basename(self.args.config_path).split('.')[0]
-                )                 
+        self.postfix = self._init_save_postfix()      
+        self.args.log_dir = os.path.join(
+            self.args.log_dir,       
+            os.path.basename(self.args.config_path).split('.')[0]
+            )        
+        self.args.log_dir += self.postfix
         ensure_dir(self.args.log_dir)
         
         self.checkpoint_dir = os.path.join(
@@ -116,7 +126,9 @@ class Trainer:
 
     def _init_wandb(self) -> None:
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        run_name = f"{os.path.basename(self.args.config_path).split('.')[0]}_{cur_time}"
+        run_name = f"{os.path.basename(self.args.config_path).split('.')[0]}"
+        run_name += self.postfix
+        run_name += f"-{cur_time}"
         wandb.init(
             project=self.args.project_name, 
             config=args.__dict__,
@@ -319,7 +331,9 @@ class Trainer:
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
                 # log reward
-                wandb.log({f"{agent_id}_reward": tensordict_actor.get(('next', 'reward', agent_id))})
+                wandb.log({
+                    f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()
+                    })
             
             if tensordict['done'].all():
                 return
