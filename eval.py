@@ -5,11 +5,12 @@ Evaluation function is used to evaluate in bulk
 import os
 os.environ['RL_WARNINGS']='False'
 import argparse
+import numpy as np
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
 from typing import List, Dict
 from tqdm import tqdm
-import numpy as np
+from copy import deepcopy
 
 import torch
 from tensordict import TensorDict
@@ -46,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         '--num_episodes', type=int,
-        default=100,
+        default=1,
         help='Number of episodes to evaluate for'
     )
     parser.add_argument(
@@ -84,9 +85,12 @@ class RunEvaluation:
 
     def _init_env(self) -> None:
         """
-        Initialize environment that has a different seed from training
+        Initialize environment that has a different seed from training environments
+        and the test_environment used to validate model during training
         """
-        seed = self.train_args.seed + np.random.randint(1000, 10000)
+        low = self.train_args.seed + self.train_args.num_episodes \
+            + self.train_args.max_episode_len + 1
+        seed = np.random.randint(low)
         env_config = self.config.env_config
         self.env_name = env_config.env_name
         env_class = env_config.env_class        
@@ -205,31 +209,10 @@ class RunEvaluation:
         print(f"Finished initializing and loading weights for {agent_config.num_agents} agents")
 
 
-
-@typechecked
-class Evaluator:
-    """
-    Class to evaluate trained agents given an environment.
-    Args:
-        agents: list of agents to evaluate
-        env: environment to evaluate agents on        
-    """
-    def __init__(
-            self, 
-            agents: List[BaseAgent], 
-            env: _EnvWrapper,
-            eval_episodes: int,
-            ) -> None:
-        self.agents = agents
-        self.env = env
-        self.eval_episodes = eval_episodes
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")        
-
-    
     def get_actions(
-            self, 
-            tensordict: TensorDict
-            ) -> TensorDict:
+        self, 
+        tensordict: TensorDict
+        ) -> TensorDict:
         """Get actions from agents
         Args:
             tensordict: input to agents
@@ -238,44 +221,47 @@ class Evaluator:
         """
         actions = {}  
         for agent_id, agent in self.agents.items(): 
-            action = agent.act(tensordict.clone())
+            action = agent.act(tensordict.clone())            
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
-            actions[agent_id] = action
-        tensordict["actions"] = actions
-        tensordict_out = self.env.step(tensordict.detach().cpu())
-        return tensordict_out
+            actions[agent_id] = action.item()
+                
+        tensordict["action"] = deepcopy(actions)
+        tensordict = self.env.step(tensordict.detach().cpu())
+        tensordict["prev_action"] = deepcopy(actions)
+        return tensordict
 
 
     def evaluate(
-            self, 
-            num_episodes: int
+            self,
             ) -> None:
         """Evaluate agents on environment for num_episodes
-        Args:
-            num_episodes: number of episodes to evaluate for
-        """
-        self.env.reset()
-        for agent in self.agents:
-            agent.set_eval()
-        episode_rewards = []             
-        for episode in range(num_episodes):
-            episode_reward = {}            
+        """        
+        episode_rewards = []       
+        for episode in range(self.args.num_episodes):
+            episode_reward = {}         
             tensordict = self.env.reset()
             done = False
-            while not done:
-                tensordict = self.get_actions(tensordict)                
-                done = tensordict.get(("next", "done"))
-                for agent_id, reward in tensordict.get(("next", "rewards")).items():
+            i = 0
+            while not done and i < self.train_args.max_episode_len:
+                tensordict = self.get_actions(tensordict.to(self.device))                
+                done = tensordict.get("done").item()
+                for agent_id, reward in tensordict.get(("next", "reward")).items():
                     if agent_id not in episode_reward:
-                        episode_reward[agent] = [reward.item()]
+                        episode_reward[agent_id] = [reward.item()]
                     else:
-                        episode_reward[agent].append(reward.item())                        
-        return episode_rewards
+                        episode_reward[agent_id].append(reward.item())
+                i += 1
+                print(f"Step {i} done {done}")
+            episode_rewards.append(episode_reward)
 
+        breakpoint()
+        return episode_rewards
+    
 
 
 
 if __name__ == '__main__':
     args = parse_args()
     evaluation_run = RunEvaluation(args)
+    evaluation_run.evaluate()

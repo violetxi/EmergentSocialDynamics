@@ -8,9 +8,10 @@ os.environ['RL_WARNINGS']='False'
 import wandb
 import argparse
 import datetime
+import numpy as np
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
-from typing import List
+from typing import List, Optional
 from copy import deepcopy
 from tqdm import tqdm
 
@@ -92,7 +93,7 @@ class Trainer:
         self._init_env(args.seed)
         self._init_agents()
         self._init_buffer()
-        self._init_wandb()        
+        self._init_wandb()
 
 
     def _init_save_postfix(self) -> str:
@@ -136,6 +137,16 @@ class Trainer:
             )
 
 
+    def _get_test_env_seed(self) -> int:
+        """
+        Initialize test environment seed to ensure no overlap with trianing env
+        """
+        env_config = self.config.env_config
+        low = self.args.seed + self.args.num_episodes + 1
+        high = low + self.args.seed + self.args.max_episode_len
+        return np.random.randint(low, high)
+        
+
     def _init_env(
         self, 
         seed: int
@@ -148,7 +159,8 @@ class Trainer:
             "device": self.device,
         }
         self.env = env_class(seed, env_config, kwargs)
-        print(f"Finished initializing {self.env_name} environment")
+        test_env_seed = self._get_test_env_seed()
+        self.test_env = env_class(test_env_seed, env_config, kwargs)
 
 
     def _init_agent(
@@ -317,14 +329,20 @@ class Trainer:
     def train_episode(
         self,
         episode: int,
-        tensordict: TensorDict
+        tensordict: TensorDict,
+        tensordict_test: Optional[TensorDict] = None
         ) -> None:
         """Train agents for one episode, in a parallelized environment env.step() takes all 
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
         for t in tqdm(range(self.args.max_episode_len)):
-            tensordict = tensordict.to(self.device)                 
-            tensordict = self._step_episode(tensordict)            
+            tensordict = tensordict.to(self.device)                        
+            tensordict = self._step_episode(tensordict)           
+            # evaluating in test environment
+            if tensordict_test is not None:
+                tensordict_test = tensordict_test.to(self.device)
+                tensordict_test = self._step_episode(tensordict_test)                
+
             for agent_id, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
@@ -332,6 +350,10 @@ class Trainer:
                 wandb.log({
                     f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()
                     })
+                if tensordict_test is not None:
+                    wandb.log({
+                        f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()
+                        })
             
             if tensordict['done'].all():
                 return
@@ -356,10 +378,11 @@ class Trainer:
             
 
     def train(self) -> None:
-        for episode in tqdm(range(self.args.num_episodes)): 
-            tensordict = self.env.reset()           
-            self.train_episode(episode, tensordict)
-
+        for episode in tqdm(range(self.args.num_episodes)):            
+            tensordict = self.env.reset(seed=episode)            
+            test_env_seed = self._get_test_env_seed()
+            tensordict_eval = self.test_env.reset(seed=test_env_seed)       
+            self.train_episode(episode, tensordict, tensordict_eval)
 
 
 

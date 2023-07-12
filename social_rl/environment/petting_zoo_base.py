@@ -33,7 +33,7 @@ class PettingZooMPEBase(_EnvWrapper):
         ) -> None:                
         self.seed = seed
         self.config = config
-        super().__init__(**base_kwargs)
+        super().__init__(**base_kwargs)        
 
 
     def _get_mpe_env_cls(self, env_name: str) -> ModuleType:
@@ -55,9 +55,15 @@ class PettingZooMPEBase(_EnvWrapper):
         return cls
 
 
-    def _init_env(self) -> None:
+    def _init_env(
+            self, 
+            seed: Optional[int] = None
+            ) -> None:
         # initialize env so it's ready to run
-        self._env.reset(self.seed)
+        if seed is None:
+            self._env.reset(self.seed)
+        else:
+            self._env.reset(seed)        
 
 
     def _build_env(self) -> ParallelEnv:
@@ -77,7 +83,11 @@ class PettingZooMPEBase(_EnvWrapper):
         self._env.reset(seed)    
 
 
-    def _reset(self, tensordict: Optional[TensorDictBase] = None, **kwargs) -> TensorDictBase:
+    def _reset(
+            self,
+            tensordict: Optional[TensorDictBase] = None, 
+            **kwargs
+            ) -> TensorDictBase:
         obs, infos = self._env.reset(**kwargs)        
         obs = {"observation": obs}
         tensordict_out = TensorDict(
