@@ -225,16 +225,31 @@ class Trainer:
         else:
             value = None
 
-        agent = self.config.agent_config.agent_class(
-            agent_idx=agent_idx, 
-            agent_id=agent_id,
-            config=self.config.agent_config,
-            actor=actor,
-            value=value, 
-            qvalue=qvalue, 
-            world_model=world_model, 
-            replay_buffer=replay_buffer            
-        )        
+        if hasattr(self.config.agent_config, 'intr_reward_weight'):
+            intr_reward_weight = self.config.agent_config.intr_reward_weight
+            agent = self.config.agent_config.agent_class(
+                agent_idx=agent_idx,
+                agent_id=agent_id,
+                config=self.config.agent_config,
+                actor=actor,
+                qvalue=qvalue,
+                world_model=world_model,
+                replay_buffer=replay_buffer,
+                intr_reward_weight=intr_reward_weight,
+                value=value
+            )
+        else:
+            agent = self.config.agent_config.agent_class(
+                agent_idx=agent_idx, 
+                agent_id=agent_id,
+                config=self.config.agent_config,
+                actor=actor,
+                value=value, 
+                qvalue=qvalue, 
+                world_model=world_model, 
+                replay_buffer=replay_buffer        
+            )
+
         return agent
 
 
@@ -266,6 +281,7 @@ class Trainer:
 
             for agent_id, agent in self.agents.items():
                 if i > 0:
+                    # do not log the first step because actions are taken randomly
                     agent.replay_buffer.add(tensordict.clone())                   
 
 
@@ -341,7 +357,7 @@ class Trainer:
             # evaluating in test environment
             if tensordict_test is not None:
                 tensordict_test = tensordict_test.to(self.device)
-                tensordict_test = self._step_episode(tensordict_test)                
+                tensordict_test = self._step_episode(tensordict_test)
 
             for agent_id, agent in self.agents.items():
                 # keep adding new experience

@@ -49,7 +49,6 @@ class BaseAgent(ABC):
             'actor_state_dict': self.actor.state_dict(),
             'qvalue_state_dict': self.qvalue.state_dict(),
             'world_model_state_dict': self.world_model.state_dict(),
-            # Uncomment the next line if your agents have a value network
             'value_state_dict': self.value.state_dict() if hasattr(self, "value") else None
         }, path)
 
@@ -59,9 +58,24 @@ class BaseAgent(ABC):
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.qvalue.load_state_dict(checkpoint['qvalue_state_dict'])
         self.world_model.load_state_dict(checkpoint['world_model_state_dict'])
-        # Uncomment the next line if your agents have a value network
         if hasattr(self, "value"):
             self.value.load_state_dict(checkpoint['value_state_dict'])
+
+    
+    def set_train(self) -> None:
+        self.world_model.train()
+        self.actor.train()
+        self.qvalue.train()
+        if hasattr(self, "value"):
+            self.value.train()
+
+    
+    def set_eval(self) -> None:
+        self.world_model.eval()
+        self.actor.eval()
+        self.qvalue.eval()
+        if hasattr(self, "value"):
+            self.value.eval()
         
 
     @abstractmethod

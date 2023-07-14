@@ -24,7 +24,6 @@ from social_rl.utils.utils import (
 )
 torch.autograd.set_detect_anomaly(True)
 
-    
 
 
 @typechecked
@@ -254,11 +253,9 @@ class RunEvaluation:
                 i += 1
                 print(f"Step {i} done {done}")
             episode_rewards.append(episode_reward)
-
-        breakpoint()
+        
         return episode_rewards
-    
-
+   
 
 
 if __name__ == '__main__':

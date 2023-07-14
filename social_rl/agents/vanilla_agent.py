@@ -106,21 +106,11 @@ class VanillaAgent(BaseAgent):
             "actor_loss": loss_actor.item(),
             "qvalue_loss": loss_qvalue.item(),
         }
-    
-
-    def set_train(self) -> None:
-        self.world_model.train()
-        self.actor.train()
-        self.qvalue.train()
-
-    
-    def set_eval(self) -> None:
-        self.world_model.eval()
-        self.actor.eval()
-        self.qvalue.eval()
 
 
     def step_optimizer(self) -> None:
         self.wm_optimizer.step()
         self.actor_optimizer.step()
         self.qvalue_optimizer.step()
+        if hasattr(self, "value"):
+            self.value_optimizer.step()
