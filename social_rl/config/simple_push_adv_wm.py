@@ -28,7 +28,7 @@ from social_rl.models.wm_nets.mlp_dynamics_model import (
     MLPDynamicsTensorDictModel
 )
 from social_rl.environment.petting_zoo_base import PettingZooMPEBase
-from social_rl.agents.vanilla_agent import VanillaAgent
+from social_rl.agents.adv_wm_agent import AdversarialWMAgent
 
 
 
@@ -53,7 +53,7 @@ class EnvConfig(BaseConfig):
         self.task_name = "simple_push_v3"
         self.env_class = PettingZooMPEBase        
         self.env_kwargs = dict(
-            max_cycles=args.max_episode_len, 
+            max_cycles=args.max_episode_len,
             continuous_actions=False
         )
 
@@ -186,7 +186,8 @@ class AgentConfig(BaseConfig):
         self.wm_config = wm_config
         self.lr_wm = 1e-4
         self.replay_buffer_config = replay_buffer_config
-        self.agent_class = VanillaAgent
+        self.agent_class = AdversarialWMAgent
+        self.intr_reward_weight = 1.0
 
 
 
@@ -197,7 +198,7 @@ class Config(BaseConfig):
             args: argparse.Namespace) -> None:
         self.exp_config = ExpConfig(args)
         wm_config = WmConfig()
-        actor_config = ActorConfig()        
+        actor_config = ActorConfig()
         qvalue_config = QValueConfig()
         replay_buffer_config = ReplayBufferConfig(self.exp_config)
         self.agent_config = AgentConfig(

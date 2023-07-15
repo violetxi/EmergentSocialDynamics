@@ -120,7 +120,7 @@ class ReplayBufferConfig(BaseConfig):
         storage = LazyMemmapStorage(
             max_size=1e6,
             scratch_dir=exp_config.log_dir,
-            device=exp_config.device,
+            device="cpu",
         )
         self.buffer_kwargs = dict(
             batch_size=self.batch_size,
