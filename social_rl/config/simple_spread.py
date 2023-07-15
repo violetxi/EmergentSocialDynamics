@@ -39,10 +39,7 @@ class ExpConfig(BaseConfig):
             args: argparse.Namespace
             ) -> None:
         for attr in vars(args):
-            setattr(self, attr, getattr(args, attr))
-        # @TODO: this will be changed after moving this to a server
-        # identify the device to use in train.py then add it to namespacec args
-        self.device = "cpu"
+            setattr(self, attr, getattr(args, attr))            
 
 
 @typechecked
