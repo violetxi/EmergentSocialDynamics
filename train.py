@@ -277,8 +277,9 @@ class Trainer:
         print(f"Starting warm-up steps for {self.args.warm_up_steps} steps")
 
         for i in tqdm(range(self.args.warm_up_steps)):
-            tensordict = tensordict.to(self.device)
-            tensordict = self._step_episode(tensordict)
+            with torch.no_grad():
+                tensordict = tensordict.to(self.device)
+                tensordict = self._step_episode(tensordict)
 
             for _, agent in self.agents.items():                
                 if i > 0:
@@ -367,12 +368,14 @@ class Trainer:
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
         for t in tqdm(range(self.args.max_episode_len)):
-            tensordict = tensordict.to(self.device)          
-            tensordict = self._step_episode(tensordict)
-            # evaluating in test environment
-            if tensordict_test is not None:
-                tensordict_test = tensordict_test.to(self.device)                                                   
-                tensordict_test = self._step_episode(tensordict_test)
+            with torch.no_grad():
+                # Disable gradient computation
+                tensordict = tensordict.to(self.device)          
+                tensordict = self._step_episode(tensordict)
+                # evaluating in test environment
+                if tensordict_test is not None:
+                    tensordict_test = tensordict_test.to(self.device)                                                   
+                    tensordict_test = self._step_episode(tensordict_test)
 
             for agent_id, agent in self.agents.items():
                 # keep adding new experience
