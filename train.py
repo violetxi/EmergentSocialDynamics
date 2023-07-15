@@ -238,6 +238,7 @@ class Trainer:
                 intr_reward_weight=intr_reward_weight,
                 value=value
             )
+            self._step_intr_reward = {}
         else:
             agent = self.config.agent_config.agent_class(
                 agent_idx=agent_idx, 
@@ -289,15 +290,27 @@ class Trainer:
         self, 
         tensordict: TensorDict
     ) -> TensorDict:        
-        actions = {}  
-        for agent_id, agent in self.agents.items(): 
+        actions = {}
+        for agent_id, agent in self.agents.items():                        
             action = agent.act(tensordict.clone())
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
-            actions[agent_id] = action            
+            actions[agent_id] = action
+
+            if hasattr(agent, 'intr_reward'):
+                self._step_intr_reward[agent_id] = agent.intr_reward
+
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict.detach().cpu())        
         tensordict["prev_action"] = deepcopy(actions)
+        
+        # combine intrinsic reward with extrinsic reward (the intrinsic reward is already scaled)
+        if hasattr(self, '_step_intr_reward') and self._step_intr_reward:
+            tensordict["intr_reward"] = deepcopy(self._step_intr_reward)
+            self._step_intr_reward = {}
+            for agent_id, intr_reward in tensordict["intr_reward"].items():
+                tensordict["next"]["reward"][agent_id] += intr_reward
+
         return tensordict
 
 
@@ -362,13 +375,37 @@ class Trainer:
             for agent_id, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
-                # log reward
-                wandb.log({
-                    f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()
-                    })
-                if tensordict_test is not None:
+                # log reward (intrinsic and extrinsic)            
+                if hasattr(agent, 'intr_reward'):
+                    intr_reward = tensordict.get(("intr_reward", agent_id)).item()
                     wandb.log({
-                        f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()
+                        f"{agent_id}_intr_reward": intr_reward
+                        })
+                    extr_reward = tensordict.get(('next', 'reward', agent_id)).item() \
+                        - intr_reward
+                    wandb.log({
+                        f"{agent_id}_reward": extr_reward
+                    })
+                else:
+                    wandb.log({
+                        f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()
+                    })
+                
+                # log test reward
+                if tensordict_test is not None:                    
+                    if hasattr(agent, 'intr_reward'):
+                        intr_reward_test = tensordict_test.get(("intr_reward", agent_id)).item()
+                        wandb.log({
+                            f"{agent_id}_intr_reward_test": intr_reward_test
+                            })
+                        extr_reward_test = tensordict_test.get(('next', 'reward', agent_id)).item() \
+                            - intr_reward_test
+                        wandb.log({
+                            f"{agent_id}_reward_test": extr_reward_test
+                        })
+                    else:
+                        wandb.log({
+                            f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()
                         })
             
             if tensordict['done'].all():
