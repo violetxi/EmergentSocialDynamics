@@ -8,7 +8,7 @@ DEFAULT_ARGS = {
     'num_episodes': int(1e4),
     'max_episode_len': int(1e3),
     'warm_up_steps': int(1e4),
-    'val_freq': int(1e3),
+    'val_freq': int(1e1),
     # wandb info
     'project_name': 'emergent-social-dynamics',
 }

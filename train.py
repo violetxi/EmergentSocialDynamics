@@ -278,9 +278,9 @@ class Trainer:
 
         for i in tqdm(range(self.args.warm_up_steps)):
             tensordict = tensordict.to(self.device)
-            tensordict = self._step_episode(tensordict)            
+            tensordict = self._step_episode(tensordict)
 
-            for agent_id, agent in self.agents.items():
+            for _, agent in self.agents.items():                
                 if i > 0:
                     # do not log the first step because actions are taken randomly
                     agent.replay_buffer.add(tensordict.clone())                   
@@ -291,7 +291,9 @@ class Trainer:
         tensordict: TensorDict
     ) -> TensorDict:        
         actions = {}
-        for agent_id, agent in self.agents.items():                        
+        for agent_id, agent in self.agents.items():
+            # Switch to eval mode for environment interaction
+            agent.set_eval()            
             action = agent.act(tensordict.clone())
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
@@ -309,7 +311,7 @@ class Trainer:
             tensordict["intr_reward"] = deepcopy(self._step_intr_reward)
             self._step_intr_reward = {}
             for agent_id, intr_reward in tensordict["intr_reward"].items():
-                tensordict["next"]["reward"][agent_id] += intr_reward
+                tensordict["next"]["reward"][agent_id] += intr_reward                
 
         return tensordict
 
@@ -365,11 +367,11 @@ class Trainer:
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
         for t in tqdm(range(self.args.max_episode_len)):
-            tensordict = tensordict.to(self.device)                        
-            tensordict = self._step_episode(tensordict)           
+            tensordict = tensordict.to(self.device)          
+            tensordict = self._step_episode(tensordict)
             # evaluating in test environment
             if tensordict_test is not None:
-                tensordict_test = tensordict_test.to(self.device)
+                tensordict_test = tensordict_test.to(self.device)                                                   
                 tensordict_test = self._step_episode(tensordict_test)
 
             for agent_id, agent in self.agents.items():
@@ -413,7 +415,9 @@ class Trainer:
         
             if t > 0:
                 # update wm and actor
-                for agent_id, agent in self.agents.items():                    
+                for agent_id, agent in self.agents.items():
+                    # swtich to train mode for learning
+                    agent.set_train()                    
                     tensordict_batch = agent.replay_buffer.sample().to(self.device)                
                     wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
                     tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
@@ -442,4 +446,4 @@ class Trainer:
 if __name__ == '__main__':
     args = parse_args()
     trainer = Trainer(args)
-    trainer.train()   
+    trainer.train()
