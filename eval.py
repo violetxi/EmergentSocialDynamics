@@ -72,12 +72,13 @@ class RunEvaluation:
         self.config = load_config_from_path(args.config_path, self.train_args)
         self._init_env()
         self._init_agents()
-            
+
 
     def _recreate_train_args(self) -> argparse.Namespace:
         train_args = argparse.Namespace(**DEFAULT_ARGS)
         if '-' in self.args.model_folder:
-            updated_train_args = self.args.model_folder.split('-')        
+            updated_train_args = self.args.model_folder.split('-')
+                   
         return train_args
 
 

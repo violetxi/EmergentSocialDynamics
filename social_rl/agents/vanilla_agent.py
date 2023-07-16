@@ -6,7 +6,9 @@ from typing import Dict, Optional
 import torch
 from tensordict.nn import TensorDictModule
 from torchrl.data import TensorDictReplayBuffer
-from torchrl.objectives.sac import DiscreteSACLoss    #SACLoss
+# {"gamma": 0.99, "lmbda": 0.95} by default.. reference:
+# https://pytorch.org/rl/reference/generated/torchrl.objectives.default_value_kwargs.html#torchrl.objectives.default_value_kwargs
+from torchrl.objectives.sac import DiscreteSACLoss
 
 from social_rl.config.base_config import BaseConfig
 from social_rl.agents.base_agent import BaseAgent

@@ -309,7 +309,6 @@ class Trainer:
             actions[agent_id] = action
 
             if hasattr(agent, 'intr_reward'):
-                #self._step_intr_reward[agent_id] = agent.intr_reward
                 self.reward_standardizer.update(agent.intr_reward)
                 intr_reward = self.reward_standardizer.standardize(agent.intr_reward)
                 self._step_intr_reward[agent_id] = intr_reward
@@ -323,7 +322,9 @@ class Trainer:
             tensordict["intr_reward"] = deepcopy(self._step_intr_reward)
             self._step_intr_reward = {}
             for agent_id, intr_reward in tensordict["intr_reward"].items():
-                tensordict["next"]["reward"][agent_id] += intr_reward          
+                extr_reward = tensordict.get(("next", "reward", agent_id))
+                tensordict.set(("extr_reward", agent_id), extr_reward)
+                tensordict.set(("next", "reward", agent_id), intr_reward + extr_reward)         
 
         return tensordict
 
@@ -399,8 +400,7 @@ class Trainer:
                         {f"{agent_id}_intr_reward": intr_reward},
                         step=self.step
                         )
-                    extr_reward = tensordict.get(('next', 'reward', agent_id)).item() \
-                        - intr_reward
+                    extr_reward = tensordict.get(("extr_reward", agent_id)).item()
                     wandb.log(
                         {f"{agent_id}_reward": extr_reward},
                         step=self.step
@@ -419,8 +419,7 @@ class Trainer:
                             {f"{agent_id}_intr_reward_test": intr_reward_test},
                             step=self.step
                             )
-                        extr_reward_test = tensordict_test.get(('next', 'reward', agent_id)).item() \
-                            - intr_reward_test
+                        extr_reward_test = tensordict_test.get(("extr_reward", agent_id)).item()
                         wandb.log(
                             {f"{agent_id}_reward_test": extr_reward_test},
                             step=self.step
