@@ -5,10 +5,11 @@ Evaluation function is used to evaluate in bulk
 import os
 os.environ['RL_WARNINGS']='False'
 import argparse
+import pickle
 import numpy as np
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
-from typing import List, Dict
+from typing import List, Dict, Union
 from tqdm import tqdm
 from copy import deepcopy
 
@@ -45,8 +46,8 @@ def parse_args() -> argparse.Namespace:
         help='Path to folder to save results'
     )
     parser.add_argument(
-        '--num_episodes', type=int,
-        default=1,
+        '--num_run', type=int,
+        default=3,
         help='Number of episodes to evaluate for'
     )
     parser.add_argument(
@@ -82,14 +83,19 @@ class RunEvaluation:
         return train_args
 
 
+    def _get_random_seed(self) -> int:
+        low = self.train_args.seed + self.train_args.num_episodes \
+            + self.train_args.max_episode_len + 1
+        return np.random.randint(low)
+
+
+
     def _init_env(self) -> None:
         """
         Initialize environment that has a different seed from training environments
         and the test_environment used to validate model during training
         """
-        low = self.train_args.seed + self.train_args.num_episodes \
-            + self.train_args.max_episode_len + 1
-        seed = np.random.randint(low)
+        seed = self._get_random_seed()
         env_config = self.config.env_config
         self.env_name = env_config.env_name
         env_class = env_config.env_class        
@@ -163,16 +169,32 @@ class RunEvaluation:
         else:
             value = None
 
-        agent = self.config.agent_config.agent_class(
-            agent_idx=agent_idx, 
-            agent_id=agent_id,
-            config=self.config.agent_config,
-            actor=actor,
-            value=value, 
-            qvalue=qvalue, 
-            world_model=world_model, 
-            replay_buffer=replay_buffer            
-        )        
+        if hasattr(self.config.agent_config, 'intr_reward_weight'):
+            intr_reward_weight = self.config.agent_config.intr_reward_weight
+            agent = self.config.agent_config.agent_class(
+                agent_idx=agent_idx,
+                agent_id=agent_id,
+                config=self.config.agent_config,
+                actor=actor,
+                qvalue=qvalue,
+                world_model=world_model,
+                replay_buffer=replay_buffer,
+                intr_reward_weight=intr_reward_weight,
+                value=value
+            )
+            self._step_intr_reward = {}
+        else:
+            agent = self.config.agent_config.agent_class(
+                agent_idx=agent_idx, 
+                agent_id=agent_id,
+                config=self.config.agent_config,
+                actor=actor,
+                value=value, 
+                qvalue=qvalue, 
+                world_model=world_model, 
+                replay_buffer=replay_buffer        
+            )
+
         return agent
 
 
@@ -180,13 +202,14 @@ class RunEvaluation:
         """Choose checkpoint to evaluate
         """
         ckpt_files = [
-            f for f in os.listdir(self.args.model_folder) if f.endswith('.pth') and 'agent' in f
+            f for f in os.listdir(self.args.model_folder) if f.endswith(".pth") 
+            and ("agent" in f or "adversary" in f)
             ]
-        eps = [int(f.split('_')[2][2:]) for f in ckpt_files]
-        if self.args.eval_ckpt_type == 'last':
+        eps = [int(f.split("_")[2][2:]) for f in ckpt_files]
+        if self.args.eval_ckpt_type == "last":
             ckpt_ep = f"ep{np.max(eps)}"
         ckpt_files = [f for f in ckpt_files if ckpt_ep in f]
-        ckpt_f_dict = {'_'.join(f.split('_')[:2]): f for f in ckpt_files}
+        ckpt_f_dict = {"_".join(f.split("_")[:2]): f for f in ckpt_files}
         return ckpt_f_dict
     
 
@@ -231,18 +254,18 @@ class RunEvaluation:
         return tensordict
 
 
-    def evaluate(
-            self,
-            ) -> None:
+    def evaluate(self) -> None:
         """Evaluate agents on environment for num_episodes
         """        
         episode_rewards = []       
-        for episode in range(self.args.num_episodes):
-            episode_reward = {}         
-            tensordict = self.env.reset()
+        for run in range(self.args.num_run):            
+            episode_reward = {}
+            run_seed = self._get_random_seed()
+            tensordict = self.env.reset(seed=run_seed)
+            print(f">>>>>>>>>>>>>>>>>>>>>>>> Evaluating run {run} with seed {run_seed}")
             done = False
             i = 0
-            while not done and i < self.train_args.max_episode_len:
+            while not done and i < 20:#self.train_args.max_episode_len:
                 tensordict = self.get_actions(tensordict.to(self.device))                
                 done = tensordict.get("done").item()
                 for agent_id, reward in tensordict.get(("next", "reward")).items():
@@ -251,11 +274,33 @@ class RunEvaluation:
                     else:
                         episode_reward[agent_id].append(reward.item())
                 i += 1
-                print(f"Step {i} done {done}")
             episode_rewards.append(episode_reward)
         
-        return episode_rewards
-   
+        agent_name = self.config.agent_config.agent_class.__name__
+        data = {agent_name : episode_rewards}
+        self.save_results(data)
+        
+
+    def save_results(
+            self, 
+            data: Dict[str, Union[str, List[Dict[str, List[float]]]]]
+            ) -> None:
+        ensure_dir(self.args.result_folder)
+        filename = f"{self.config.env_config.env_name}-{self.config.env_config.task_name}.pkl"
+        result_path = os.path.join(self.args.result_folder, filename)
+
+        if os.path.exists(result_path):
+            print(f"{result_path} alreadying exist, appending data..")
+            with open(result_path, 'rb') as f:
+                existing_data = pickle.load(f)
+                existing_data.append(data)
+        else:
+            existing_data = [data]
+
+        with open(result_path, 'wb') as f:
+            pickle.dump(existing_data, f)
+        print(f"data saved to {result_path}..")  
+
 
 
 if __name__ == '__main__':

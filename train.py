@@ -312,7 +312,7 @@ class Trainer:
             tensordict["intr_reward"] = deepcopy(self._step_intr_reward)
             self._step_intr_reward = {}
             for agent_id, intr_reward in tensordict["intr_reward"].items():
-                tensordict["next"]["reward"][agent_id] += intr_reward                
+                tensordict["next"]["reward"][agent_id] += intr_reward          
 
         return tensordict
 
@@ -368,50 +368,61 @@ class Trainer:
         agents' actions as input and returns the next obs, reward, done, info for each agent
         """
         for t in tqdm(range(self.args.max_episode_len)):
+            self.step += 1
             with torch.no_grad():
                 # Disable gradient computation
                 tensordict = tensordict.to(self.device)          
                 tensordict = self._step_episode(tensordict)
                 # evaluating in test environment
                 if tensordict_test is not None:
-                    tensordict_test = tensordict_test.to(self.device)                                                   
+                    tensordict_test = tensordict_test.to(self.device)
                     tensordict_test = self._step_episode(tensordict_test)
 
             for agent_id, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
                 # log reward (intrinsic and extrinsic)            
-                if hasattr(agent, 'intr_reward'):
+                if hasattr(agent, 'intr_reward'):                    
                     intr_reward = tensordict.get(("intr_reward", agent_id)).item()
-                    wandb.log({
-                        f"{agent_id}_intr_reward": intr_reward
-                        })
+                    wandb.log(
+                        {f"{agent_id}_intr_reward": intr_reward},
+                        step=self.step
+                        )
                     extr_reward = tensordict.get(('next', 'reward', agent_id)).item() \
                         - intr_reward
-                    wandb.log({
-                        f"{agent_id}_reward": extr_reward
-                    })
+                    wandb.log(
+                        {f"{agent_id}_reward": extr_reward},
+                        step=self.step
+                        )
+                    if extr_reward > 1e3:
+                        breakpoint()
                 else:
-                    wandb.log({
-                        f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()
-                    })
+                    wandb.log(
+                        {f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()},
+                        step=self.step
+                        )
                 
                 # log test reward
-                if tensordict_test is not None:                    
+                if tensordict_test is not None:           
                     if hasattr(agent, 'intr_reward'):
                         intr_reward_test = tensordict_test.get(("intr_reward", agent_id)).item()
-                        wandb.log({
-                            f"{agent_id}_intr_reward_test": intr_reward_test
-                            })
+                        wandb.log(
+                            {f"{agent_id}_intr_reward_test": intr_reward_test},
+                            step=self.step
+                            )
                         extr_reward_test = tensordict_test.get(('next', 'reward', agent_id)).item() \
                             - intr_reward_test
-                        wandb.log({
-                            f"{agent_id}_reward_test": extr_reward_test
-                        })
+                        wandb.log(
+                            {f"{agent_id}_reward_test": extr_reward_test},
+                            step=self.step
+                            )
+                        if extr_reward_test > 1e3:
+                            breakpoint()
                     else:
-                        wandb.log({
-                            f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()
-                        })
+                        wandb.log(
+                            {f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()},
+                            step=self.step
+                            )
             
             if tensordict['done'].all():
                 return
@@ -420,7 +431,7 @@ class Trainer:
                 # update wm and actor
                 for agent_id, agent in self.agents.items():
                     # swtich to train mode for learning
-                    agent.set_train()                    
+                    agent.set_train()  
                     tensordict_batch = agent.replay_buffer.sample().to(self.device)                
                     wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
                     tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
@@ -428,9 +439,15 @@ class Trainer:
                     agent.step_optimizer()
                     # log wm_dict and actor_dict
                     for key, value in wm_loss_dict.items():
-                        wandb.log({f"{agent_id}_wm_{key}": value})
+                        wandb.log(
+                            {f"{agent_id}_wm_{key}": value},
+                            step=self.step
+                            )
                     for key, value in actor_loss_dict.items():
-                        wandb.log({f"{agent_id}_{key}": value})
+                        wandb.log(
+                            {f"{agent_id}_{key}": value},
+                            step=self.step
+                        )
         
         for agent_id, agent in self.agents.items():
             model_save_path = f"{self.checkpoint_dir}/{agent_id}_ep{episode}_model_weights.pth"
@@ -438,10 +455,12 @@ class Trainer:
             
 
     def train(self) -> None:
+        self.step = 0
         for episode in tqdm(range(self.args.num_episodes)):            
             tensordict = self.env.reset(seed=episode)            
             test_env_seed = self._get_test_env_seed()
-            tensordict_eval = self.test_env.reset(seed=test_env_seed)       
+            #tensordict_eval = self.test_env.reset(seed=test_env_seed)       
+            tensordict_eval = None
             self.train_episode(episode, tensordict, tensordict_eval)
 
 
