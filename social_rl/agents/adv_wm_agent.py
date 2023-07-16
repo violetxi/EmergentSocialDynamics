@@ -79,7 +79,7 @@ class AdversarialWMAgent(BaseAgent):
             loss_dict, tensordict = self.world_model.loss(tensordict)
             tensordict = self.actor(tensordict)
             if hasattr(self, "intr_reward_weight") and self.intr_reward_weight > 0:                
-                self.intr_reward = loss_dict['loss'].detach().item() * self.intr_reward_weight
+                self.intr_reward = loss_dict['loss'].detach() * self.intr_reward_weight
             return tensordict["action"]
         
 

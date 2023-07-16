@@ -6,9 +6,8 @@ DEFAULT_ARGS = {
     'log_dir': './logs/',
     'batch_size': 2048,
     'num_episodes': int(1e4),
-    'max_episode_len': int(1e3),
-    'warm_up_steps': int(1e4),
-    'val_freq': int(1e3),
+    'max_episode_len': int(3e3),
+    'warm_up_steps': int(3e3),
     # wandb info
     'project_name': 'emergent-social-dynamics',
 }

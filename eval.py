@@ -78,7 +78,7 @@ class RunEvaluation:
         train_args = argparse.Namespace(**DEFAULT_ARGS)
         if '-' in self.args.model_folder:
             updated_train_args = self.args.model_folder.split('-')
-                   
+
         return train_args
 
 
@@ -86,7 +86,6 @@ class RunEvaluation:
         low = self.train_args.seed + self.train_args.num_episodes \
             + self.train_args.max_episode_len + 1
         return np.random.randint(low)
-
 
 
     def _init_env(self) -> None:
