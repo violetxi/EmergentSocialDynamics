@@ -20,11 +20,13 @@ from tensordict import TensorDict
 from torchrl.modules.tensordict_module.common import SafeModule
 
 from social_rl.agents.base_agent import BaseAgent
+from social_rl.utils.reward_standardizer import RewardStandardizer
 from social_rl.utils.utils import (
     load_config_from_path,
     ensure_dir,
 )
 torch.autograd.set_detect_anomaly(True)
+
 
 
 @typechecked
@@ -82,14 +84,20 @@ def parse_args() -> argparse.Namespace:
 
 @typechecked
 class Trainer:
+    """Trainer class contains a reward standardizer to regularize rewards such 
+    that it has mean=0, std=1.
+    Args:
+        args (argparse.Namespace): arguments
+    """
     def __init__(
         self, 
         args: argparse.Namespace
-    ) -> None:        
-        self.args = args
+    ) -> None:
+        self.reward_standardizer = RewardStandardizer()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.args = args        
         self._init_log_dir()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")        
-        self.config = load_config_from_path(args.config_path, args)
+        self.config = load_config_from_path(args.config_path, args)        
         self._init_env(args.seed)
         self._init_agents()
         self._init_buffer()
@@ -301,7 +309,10 @@ class Trainer:
             actions[agent_id] = action
 
             if hasattr(agent, 'intr_reward'):
-                self._step_intr_reward[agent_id] = agent.intr_reward
+                #self._step_intr_reward[agent_id] = agent.intr_reward
+                self.reward_standardizer.update(agent.intr_reward)
+                intr_reward = self.reward_standardizer.standardize(agent.intr_reward)
+                self._step_intr_reward[agent_id] = intr_reward
 
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict.detach().cpu())        
@@ -394,8 +405,6 @@ class Trainer:
                         {f"{agent_id}_reward": extr_reward},
                         step=self.step
                         )
-                    if extr_reward > 1e3:
-                        breakpoint()
                 else:
                     wandb.log(
                         {f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()},
@@ -415,9 +424,7 @@ class Trainer:
                         wandb.log(
                             {f"{agent_id}_reward_test": extr_reward_test},
                             step=self.step
-                            )
-                        if extr_reward_test > 1e3:
-                            breakpoint()
+                            )                        
                     else:
                         wandb.log(
                             {f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()},
@@ -459,8 +466,7 @@ class Trainer:
         for episode in tqdm(range(self.args.num_episodes)):            
             tensordict = self.env.reset(seed=episode)            
             test_env_seed = self._get_test_env_seed()
-            #tensordict_eval = self.test_env.reset(seed=test_env_seed)       
-            tensordict_eval = None
+            tensordict_eval = self.test_env.reset(seed=test_env_seed)
             self.train_episode(episode, tensordict, tensordict_eval)
 
 

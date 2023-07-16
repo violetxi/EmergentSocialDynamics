@@ -122,6 +122,10 @@ class PettingZooMPEBase(_EnvWrapper):
             "done": done,
             #"truncated": truncated
         }
+        rew_vaues = list(rewards.values())
+        if any(v > 1000 for v in rew_vaues):
+            print("Rewards from environment", rewards)
+            breakpoint()
         obs_dict = {("next", key): val for key, val in obs_dict.items()}
         tensordict_out = TensorDict(
             obs_dict, batch_size=tensordict.batch_size, device=self.device
