@@ -165,3 +165,5 @@ cython_debug/
 .DS_Store
 logs/
 wandb/
+# this is going to have a bunch in-line execution
+analysis.py

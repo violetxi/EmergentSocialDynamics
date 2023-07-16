@@ -11,3 +11,5 @@ pytest
 pyyaml
 pytest-instafail
 jupyter
+matplotlib
+seaborn

@@ -10,12 +10,10 @@ import numpy as np
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
 from typing import List, Dict, Union
-from tqdm import tqdm
 from copy import deepcopy
 
 import torch
 from tensordict import TensorDict
-from torchrl.envs.common import _EnvWrapper
 from torchrl.modules.tensordict_module.common import SafeModule
 
 from social_rl.agents.base_agent import BaseAgent
@@ -265,7 +263,7 @@ class RunEvaluation:
             print(f">>>>>>>>>>>>>>>>>>>>>>>> Evaluating run {run} with seed {run_seed}")
             done = False
             i = 0
-            while not done and i < 20:#self.train_args.max_episode_len:
+            while not done and i < self.train_args.max_episode_len:
                 tensordict = self.get_actions(tensordict.to(self.device))                
                 done = tensordict.get("done").item()
                 for agent_id, reward in tensordict.get(("next", "reward")).items():
@@ -275,7 +273,6 @@ class RunEvaluation:
                         episode_reward[agent_id].append(reward.item())
                 i += 1
             episode_rewards.append(episode_reward)
-        
         agent_name = self.config.agent_config.agent_class.__name__
         data = {agent_name : episode_rewards}
         self.save_results(data)
@@ -299,7 +296,7 @@ class RunEvaluation:
 
         with open(result_path, 'wb') as f:
             pickle.dump(existing_data, f)
-        print(f"data saved to {result_path}..")  
+        print(f"data saved to {result_path}..")
 
 
 
