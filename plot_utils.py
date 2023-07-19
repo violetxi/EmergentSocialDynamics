@@ -14,7 +14,7 @@ from social_rl.utils.utils import ensure_dir
 def plot_avg_cumulative_rewards(result_path: str) -> None:
     """Plot cumulative rewards for each agent across differe
     """
-    data = pickle.load(open(result_path, 'rb'))
+    data = pickle.load(open(result_path, 'rb'))    
     filename = os.path.basename(result_path)
     result_folder = os.path.dirname(result_path)
     # Create folder for the plots if it doesn't exist
@@ -26,11 +26,13 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     plot_data = {}        
     for run in data:
         for model, episodes in run.items():
-            if model not in plot_data:
-                plot_data[model] = {agent: [] for agent in episodes[0].keys()}
-            for episode in episodes:
-                for agent, rewards in episode.items():
-                    plot_data[model][agent].append(np.cumsum(rewards))  # Cumulative rewards for each episode
+            # TODO temporary fix for the bug in the data
+            if len(episodes[0]['agent_0']) > 30:
+                if model not in plot_data:
+                    plot_data[model] = {agent: [] for agent in episodes[0].keys()}
+                for episode in episodes:
+                    for agent, rewards in episode.items():
+                        plot_data[model][agent].append(np.cumsum(rewards))  # Cumulative rewards for each episode
     
     # Set the color palette to "Set2"
     sns.set_palette("Set2")

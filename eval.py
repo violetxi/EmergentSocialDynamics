@@ -244,13 +244,23 @@ class RunEvaluation:
         """
         actions = {}  
         for agent_id, agent in self.agents.items(): 
-            action = agent.act(tensordict.clone())            
+            output = agent.act(tensordict.clone())
+            if isinstance(output, torch.Tensor):
+                action = output
+            else:
+                action = output["action"]          
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
             actions[agent_id] = action.item()
                 
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict.detach().cpu())
+        # Add logging for landmark positions        
+        # env = self.env._env.aec_env.env
+        # for agent in env.world.agents:
+        #     for i, landmark in enumerate(env.world.landmarks):
+        #         print(f"Landmark {i} position for agent {agent.name}: {landmark.state.p_pos}")
+
         rgb_obs = self.env.render()
         tensordict["prev_action"] = deepcopy(actions)
         return tensordict, rgb_obs
@@ -269,7 +279,7 @@ class RunEvaluation:
             print(f">>>>>>>>>>>>>>>>>>>>>>>> Evaluating run {run} with seed {run_seed}")
             done = False
             i = 0            
-            for i in tqdm(range(20)):#tqdm(range(self.train_args.max_episode_len)):
+            for i in tqdm(range(self.train_args.max_episode_len)): #tqdm(range(20)):
                 tensordict, rgb_obs = self.get_actions(tensordict.to(self.device))                
                 run_frames.append(rgb_obs)                
                 done = tensordict.get("done").item()
