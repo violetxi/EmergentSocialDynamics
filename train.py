@@ -435,8 +435,8 @@ class Trainer:
             for agent_id, agent in self.agents.items():
                 # keep adding new experience
                 agent.replay_buffer.add(tensordict.clone())
-                # log reward (intrinsic and extrinsic)            
-                if hasattr(agent, 'intr_reward'):                    
+                # log reward (intrinsic and extrinsic)
+                if 'intr_reward' in tensordict.keys():
                     intr_reward = tensordict.get(("intr_reward", agent_id)).item()
                     wandb.log(
                         {f"{agent_id}_intr_reward": intr_reward},
@@ -454,8 +454,8 @@ class Trainer:
                         )
                 
                 # log test reward
-                if tensordict_test is not None:           
-                    if hasattr(agent, 'intr_reward'):
+                if tensordict_test is not None:
+                    if 'intr_reward' in tensordict_test.keys():
                         intr_reward_test = tensordict_test.get(("intr_reward", agent_id)).item()
                         wandb.log(
                             {f"{agent_id}_intr_reward_test": intr_reward_test},
