@@ -93,18 +93,29 @@ class Trainer:
         self.args = args        
         self._init_log_dir()
         self.config = load_config_from_path(args.config_path, args)        
+        self._set_centralization()
         self._init_env(args.seed)
         self._init_agents()
         self._init_buffer()
-        self._init_wandb()
+        self._init_wandb()        
+
+
+    def _set_centralization(self) -> None:
+        if self.config.agent_config.agent_class.__name__ \
+            in DEFAULT_ARGS["centralized_agent_list"]:
+            self.decentralized = False
+            self.centralized_data = {}
+        else:
+            self.decentralized = True
 
 
     def _init_save_postfix(self) -> str:
         postfix = ""
         for arg, default_value in DEFAULT_ARGS.items():
-            current_value = getattr(args, arg)
-            if current_value != default_value:
-                postfix += f'-{arg}_{current_value}'
+            if arg != "centralized_agent_list":
+                current_value = getattr(args, arg)
+                if current_value != default_value:
+                    postfix += f'-{arg}_{current_value}'
         return postfix
     
 
@@ -290,37 +301,73 @@ class Trainer:
                     agent.replay_buffer.add(tensordict.clone())                   
 
 
+    def get_centralized_data(
+            self,
+            agent_id: str,
+            tensordict: TensorDict
+            ) -> None:
+        """Get centralized data from decentralized data
+        """
+        if self.config.agent_config.agent_class.__name__ == "SocialInfluenceAgent":
+            keys = ['logits', 'moa_cf_logits']
+        
+        for key in keys:
+            if agent_id in self.centralized_data:
+                self.centralized_data[agent_id][key] = tensordict.get(key)
+            else:
+                self.centralized_data[agent_id] = {key: tensordict.get(key)}
+
+
     def _step_episode(
         self, 
         tensordict: TensorDict
-    ) -> TensorDict:        
+    ) -> TensorDict:
         actions = {}
         for agent_id, agent in self.agents.items():
             # Switch to eval mode for environment interaction
-            agent.set_eval()            
-            action = agent.act(tensordict.clone())
+            agent.set_eval()
+            output = agent.act(tensordict.clone())
+            if isinstance(output, torch.Tensor):
+                action = output
+            else:
+                action = output["action"]
             if len(action.shape) == 2:
                 action = torch.argmax(action, dim=1)[0]
             actions[agent_id] = action
-
-            if hasattr(agent, 'intr_reward'):
-                self.reward_standardizer.update(agent.intr_reward)
-                intr_reward = self.reward_standardizer.standardize(agent.intr_reward)
-                self._step_intr_reward[agent_id] = intr_reward
+    
+            if hasattr(self.config.agent_config, 'intr_reward_weight'):
+                # intrinsic reward can be computed in decentralized way 
+                if hasattr(agent, 'intr_reward'):
+                    assert self.decentralized, \
+                        "Intrinsic reward can only exist now when decentralized is True"
+                    self.reward_standardizer.update(agent.intr_reward)
+                    intr_reward = self.reward_standardizer.standardize(agent.intr_reward)
+                    self._step_intr_reward[agent_id] = intr_reward
+                else:
+                    if isinstance(output, TensorDict):       
+                        self.get_centralized_data(agent_id, output)
 
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict.detach().cpu())        
         tensordict["prev_action"] = deepcopy(actions)
+        # if not decentralized, we need to compute intrinsic reward after 
+        # relevant data is collected        
+        if not self.decentralized and self.centralized_data:                       
+            for agent_id, agent in self.agents.items():
+                intr_reward = agent.compute_intr_reward(agent_id, self.centralized_data)
+                self.reward_standardizer.update(intr_reward)
+                intr_reward = self.reward_standardizer.standardize(intr_reward)
+                self._step_intr_reward[agent_id] = intr_reward
+            self.centralized_data = {}  # reset centralized data    
         
         # combine intrinsic reward with extrinsic reward (the intrinsic reward is already scaled)
-        if hasattr(self, '_step_intr_reward') and self._step_intr_reward:
+        if hasattr(self, '_step_intr_reward') and self._step_intr_reward:            
             tensordict["intr_reward"] = deepcopy(self._step_intr_reward)
             self._step_intr_reward = {}
             for agent_id, intr_reward in tensordict["intr_reward"].items():
                 extr_reward = tensordict.get(("next", "reward", agent_id))
                 tensordict.set(("extr_reward", agent_id), extr_reward)
-                tensordict.set(("next", "reward", agent_id), intr_reward + extr_reward)         
-
+                tensordict.set(("next", "reward", agent_id), intr_reward + extr_reward)
         return tensordict
 
 

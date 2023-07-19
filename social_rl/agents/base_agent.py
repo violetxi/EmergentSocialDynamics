@@ -20,9 +20,9 @@ class BaseAgent(ABC):
             agent_id: str,
             actor: TensorDictModule,    # actor network            
             qvalue: TensorDictModule,    # qvalue network
-            world_model: nn.Module, #TensorDictModule,   # world model
-            replay_buffer: TensorDictReplayBuffer,     # replay buffer
-            value: Optional[TensorDictModule] = None     # value network
+            world_model: TensorDictModule,    # world model
+            replay_buffer: TensorDictReplayBuffer,    # replay buffer
+            value: Optional[TensorDictModule] = None    # value network
         ) -> None:
         """Base agent class
         args:

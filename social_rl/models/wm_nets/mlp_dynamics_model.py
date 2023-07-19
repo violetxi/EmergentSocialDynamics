@@ -1,3 +1,8 @@
+"""World model to predict 
+1) self's next state given current state and action,
+2) other's action given current state and past action (t-1)
+This is used in VanillaAgent, and AdversarialWMIMAgent (vanilla wm)
+"""
 from typing import Dict, Any, Optional, Tuple, Union, List
 from typeguard import typechecked
 
@@ -229,7 +234,7 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
             ).to(tensordict.device)
         prev_action= convert_tensordict_to_tensor(
             tensordict.get('prev_action'), "action", self.action_dim
-            ).to(tensordict.device)
+            ).to(tensordict.device)        
         wm_dict = self.module(obs, action, prev_action, next_obs)
 
         assert list(wm_dict.keys()) == self.out_keys, \

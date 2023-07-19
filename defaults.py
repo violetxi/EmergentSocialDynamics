@@ -10,4 +10,5 @@ DEFAULT_ARGS = {
     'warm_up_steps': int(3e3),
     # wandb info
     'project_name': 'emergent-social-dynamics',
+    'centralized_agent_list': ['SocialInfluenceAgent']
 }
