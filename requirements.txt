@@ -13,3 +13,4 @@ pytest-instafail
 jupyter
 matplotlib
 seaborn
+opencv-python

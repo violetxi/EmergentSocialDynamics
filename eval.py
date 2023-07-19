@@ -4,12 +4,14 @@ Evaluation function is used to evaluate in bulk
 """
 import os
 os.environ['RL_WARNINGS']='False'
+import cv2
 import argparse
 import pickle
 import numpy as np
+from tqdm import tqdm
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 from copy import deepcopy
 
 import torch
@@ -95,11 +97,12 @@ class RunEvaluation:
         """
         seed = self._get_random_seed()
         env_config = self.config.env_config
+        env_config.env_kwargs['render_mode']='rgb_array'        
         self.env_name = env_config.env_name
-        env_class = env_config.env_class        
+        env_class = env_config.env_class                
         # Do not use batch_size for environment
         kwargs = {
-            "device": self.device,
+            "device": self.device
         }
         self.env = env_class(seed, env_config, kwargs)
         print(f"Finished initializing {self.env_name} environment with seed {seed}")
@@ -232,7 +235,7 @@ class RunEvaluation:
     def get_actions(
         self, 
         tensordict: TensorDict
-        ) -> TensorDict:
+        ) -> tuple[TensorDict, np.array]: #TensorDict:
         """Get actions from agents
         Args:
             tensordict: input to agents
@@ -248,24 +251,30 @@ class RunEvaluation:
                 
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict.detach().cpu())
+        rgb_obs = self.env.render()
         tensordict["prev_action"] = deepcopy(actions)
-        return tensordict
+        return tensordict, rgb_obs
 
 
     def evaluate(self) -> None:
         """Evaluate agents on environment for num_episodes
         """        
-        episode_rewards = []       
+        episode_rewards = []
+        episode_frames = []   
         for run in range(self.args.num_run):            
             episode_reward = {}
+            run_frames = []
             run_seed = self._get_random_seed()
             tensordict = self.env.reset(seed=run_seed)
             print(f">>>>>>>>>>>>>>>>>>>>>>>> Evaluating run {run} with seed {run_seed}")
             done = False
-            i = 0
-            while not done and i < self.train_args.max_episode_len:
-                tensordict = self.get_actions(tensordict.to(self.device))                
+            i = 0            
+            for i in tqdm(range(20)):#tqdm(range(self.train_args.max_episode_len)):
+                tensordict, rgb_obs = self.get_actions(tensordict.to(self.device))                
+                run_frames.append(rgb_obs)                
                 done = tensordict.get("done").item()
+                if done:
+                    break
                 for agent_id, reward in tensordict.get(("next", "reward")).items():
                     if agent_id not in episode_reward:
                         episode_reward[agent_id] = [reward.item()]
@@ -273,18 +282,20 @@ class RunEvaluation:
                         episode_reward[agent_id].append(reward.item())
                 i += 1
             episode_rewards.append(episode_reward)
+            episode_frames.append(run_frames)
         agent_name = self.config.agent_config.agent_class.__name__
         data = {agent_name : episode_rewards}
-        self.save_results(data)
-        
+        self.save_results(data, episode_frames)
+
 
     def save_results(
             self, 
-            data: Dict[str, Union[str, List[Dict[str, List[float]]]]]
+            data: Dict[str, Union[str, List[Dict[str, List[float]]]]],
+            episode_frames: Optional[List[List[np.ndarray]]] = None
             ) -> None:
         ensure_dir(self.args.result_folder)
-        filename = f"{self.config.env_config.env_name}-{self.config.env_config.task_name}.pkl"
-        result_path = os.path.join(self.args.result_folder, filename)
+        filename = f"{self.config.env_config.env_name}-{self.config.env_config.task_name}"
+        result_path = os.path.join(self.args.result_folder, f"{filename}.pkl")
 
         if os.path.exists(result_path):
             print(f"{result_path} alreadying exist, appending data..")
@@ -297,6 +308,30 @@ class RunEvaluation:
         with open(result_path, 'wb') as f:
             pickle.dump(existing_data, f)
         print(f"data saved to {result_path}..")
+
+        video_folder = os.path.join(self.args.result_folder, "videos", filename)        
+        ensure_dir(video_folder)
+        model_name = self.config.agent_config.agent_class.__name__
+        for i, run_frames in enumerate(episode_frames):
+            video_path = os.path.join(video_folder, f"{model_name}-run_{i}.mp4")          
+            self.save_video(run_frames, video_path)
+
+
+        # write a function to save list of frames to video
+    def save_video(self, frames: List[np.ndarray], filename: str) -> None:
+        """Save frames to video
+        Args:
+            frames: list of frames
+            filename: filename to save video to
+        """
+        print(f"Saving video to {filename}..")
+        height, width, layers = frames[0].shape
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video = cv2.VideoWriter(filename, fourcc, 30, (width, height))
+        for frame in frames:
+            video.write(frame.swapaxes(0, 1))
+        cv2.destroyAllWindows()
+        video.release()
 
 
 
