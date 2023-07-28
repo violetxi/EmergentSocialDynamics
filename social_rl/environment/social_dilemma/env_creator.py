@@ -1,6 +1,6 @@
-from social_dilemmas.envs.cleanup import CleanupEnv
-from social_dilemmas.envs.harvest import HarvestEnv
-from social_dilemmas.envs.switch import SwitchEnv
+from cleanup import CleanupEnv
+from harvest import HarvestEnv
+
 
 
 def get_env_creator(
@@ -9,11 +9,9 @@ def get_env_creator(
     use_collective_reward=False,
     inequity_averse_reward=False,
     alpha=0.0,
-    beta=0.0,
-    num_switches=6,
+    beta=0.0
 ):
     if env == "harvest":
-
         def env_creator(_):
             return HarvestEnv(
                 num_agents=num_agents,
@@ -25,7 +23,6 @@ def get_env_creator(
             )
 
     elif env == "cleanup":
-
         def env_creator(_):
             return CleanupEnv(
                 num_agents=num_agents,
@@ -35,13 +32,7 @@ def get_env_creator(
                 alpha=alpha,
                 beta=beta,
             )
-
-    elif env == "switch":
-
-        def env_creator(_):
-            return SwitchEnv(num_agents=num_agents, num_switches=num_switches)
-
     else:
-        raise ValueError(f"env must be one of harvest, cleanup, switch, not {env}")
+        raise ValueError(f"env must be one of harvest, cleanup, not {env}")
 
     return env_creator

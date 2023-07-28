@@ -10,7 +10,8 @@ from torchrl.envs.utils import check_env_specs, step_mdp
 from torchrl.envs.common import _EnvWrapper
 
 import social_rl.environment.petting_zoo_base as petting_zoo_base
-from social_rl.config.sim_tag_default import Config
+from social_rl.config.social_dilemma_configs.cleanup_config import Config
+
 
 @typechecked
 def test_env_rollout(env: _EnvWrapper):
