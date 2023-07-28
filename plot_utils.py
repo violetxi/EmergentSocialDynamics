@@ -26,8 +26,8 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     plot_data = {}        
     for run in data:
         for model, episodes in run.items():
-            # TODO temporary fix for the bug in the data
-            if len(episodes[0]['agent_0']) > 30:
+            # @TODO temporary fix for the bug in the data
+            if len(episodes[0]['agent_0']) > 300:
                 if model not in plot_data:
                     plot_data[model] = {agent: [] for agent in episodes[0].keys()}
                 for episode in episodes:
@@ -65,11 +65,14 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
         avg_returns = {}
         for run in data:
             for model, episodes in run.items():
-                if model not in avg_returns:
-                    avg_returns[model] = {agent: [] for agent in episodes[0].keys()}
-                for episode in episodes:
-                    for agent, rewards in episode.items():
-                        avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
+                # @TODO temporary fix for the bug in the data
+                if len(episodes[0]['agent_0']) > 300:
+                    print(model)
+                    if model not in avg_returns:
+                        avg_returns[model] = {agent: [] for agent in episodes[0].keys()}
+                    for episode in episodes:
+                        for agent, rewards in episode.items():
+                            avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
         # Calculate average return and standard error for each model
         for model, agents in avg_returns.items():
             for agent, rewards in agents.items():
@@ -87,6 +90,7 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
         for model, agent_rewards_list in model_res.items() 
         for agent_rewards in agent_rewards_list 
         for agent, rewards in agent_rewards.items()
+        if len(rewards) > 300    # @TODO temporary fix for the bug in the data
         )
     df = df.explode('reward')
     #breakpoint()
