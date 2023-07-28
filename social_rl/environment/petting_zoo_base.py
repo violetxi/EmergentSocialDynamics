@@ -9,7 +9,7 @@ from pettingzoo.utils.env import ParallelEnv
 from tensordict import TensorDict
 from tensordict.tensordict import TensorDictBase
 from torchrl.envs.common import _EnvWrapper
-from torchrl.data.tensor_specs import CompositeSpec, UnboundedContinuousTensorSpec
+from torchrl.data.tensor_specs import CompositeSpec
 
 from social_rl.config.base_config import BaseConfig
 from social_rl.utils.utils import gym_to_torchrl_spec_transform
