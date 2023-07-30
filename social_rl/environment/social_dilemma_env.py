@@ -15,6 +15,7 @@ from social_rl.environment.social_dilemma.map_env import MapEnv
 from social_rl.environment.social_dilemma.env_creator import get_env_creator
 
 
+
 @typechecked
 class SocialDilemmaEnv(_EnvWrapper):
     """Social Dilemma environment wrapper including CleanUp and Harvest
@@ -26,18 +27,18 @@ class SocialDilemmaEnv(_EnvWrapper):
     def __init__(
             self,
             seed: int,
-            config: BaseConfig,
+            config: BaseConfig,            
             base_kwargs: Dict
     ) -> None:
         self.seed = seed
         self.config = config
-        super().__init__(**base_kwargs)
+        super().__init__(**base_kwargs)        
 
 
     def _init_env(self) -> None:
         """Initialize the environment: only needs to change the seed for environment
-        """
-        np.random.seed(self.seed)
+        """              
+        np.random.seed(self.seed)        
         
 
     def _build_env(self) -> MapEnv:
@@ -49,7 +50,7 @@ class SocialDilemmaEnv(_EnvWrapper):
             )
         env = env_creator(None)
         return env
-    
+
 
     def _check_kwargs(self, kwargs: Dict) -> None:
         pass
@@ -71,14 +72,18 @@ class SocialDilemmaEnv(_EnvWrapper):
             for k, v in ob.items():
                 if isinstance(v, np.ndarray):
                     v = v.copy()
-                    obs[agent_id][k] = torch.from_numpy(v).to(self.device)
+                    if len(v.shape) == 3:
+                        v = self.config.tranforms(v)
+                    else:
+                        v = torch.from_numpy(v)
+                    obs[agent_id][k] = v.to(self.device)
         return obs
 
     def _reset(
             self, 
             tensordict: Optional[TensorDict], 
             **kwargs
-            ) -> TensorDict:
+            ) -> TensorDict:        
         obs = self._env.reset()
         obs = self._convert_ndarray_to_tensor(obs)
         obs = {"observation": obs}        

@@ -8,6 +8,13 @@ import torch.nn as nn
 from typeguard import typechecked
 from typing import Optional
 
+import torchvision
+torchvision.disable_beta_transforms_warning()    # v2 modules are still in beta, disable beta warning
+from torchvision.transforms.v2 import (
+    Compose, 
+    Grayscale, 
+    ToTensor
+)
 from torchrl.data import (
     TensorDictReplayBuffer, 
     LazyMemmapStorage
@@ -47,7 +54,11 @@ class EnvConfig(BaseConfig):
     def __init__(self) -> None:
         self.env_name = "social_dilemma"
         self.task_name = "cleanup"
-        self.env_class = SocialDilemmaEnv        
+        self.env_class = SocialDilemmaEnv
+        self.tranforms = Compose([            
+            ToTensor(),
+            Grayscale()
+        ])
         self.env_kwargs = dict(
             num_agents=5,
             use_collective_reward=False,
