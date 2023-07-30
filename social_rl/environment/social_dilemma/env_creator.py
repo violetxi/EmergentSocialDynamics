@@ -1,11 +1,11 @@
-from cleanup import CleanupEnv
-from harvest import HarvestEnv
+from social_rl.environment.social_dilemma.cleanup import CleanupEnv
+from social_rl.environment.social_dilemma.harvest import HarvestEnv
 
 
 
 def get_env_creator(
     env,
-    num_agents,
+    num_agents,    
     use_collective_reward=False,
     inequity_averse_reward=False,
     alpha=0.0,

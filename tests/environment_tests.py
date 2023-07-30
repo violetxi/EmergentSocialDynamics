@@ -9,8 +9,9 @@ from typing import Any, Dict, Optional, Callable
 from torchrl.envs.utils import check_env_specs, step_mdp
 from torchrl.envs.common import _EnvWrapper
 
-import social_rl.environment.petting_zoo_base as petting_zoo_base
-from social_rl.config.social_dilemma_configs.cleanup_config import Config
+#import social_rl.environment.petting_zoo_base as petting_zoo_base
+from social_rl.environment.social_dilemma_env import SocialDilemmaEnv
+from social_rl.config.social_dilemma_configs.cleanup_config import EnvConfig
 
 
 @typechecked
@@ -29,11 +30,15 @@ def test_env_rollout(env: _EnvWrapper):
             for k, v in obs_next.items():
                 obs_check_passed = (obs_next == obs_plus_one).all()
                 assert obs_check_passed, \
-                    f"Observation {k} at rollout {i} and {i+1} are not the same"
+                    f"Observation {k} at rollout {i} and {i+1} are not the same"            
     print("Rollout passed!")
         
 
 if __name__ == '__main__':
     seed = 0
-    env = petting_zoo_base.PettingZooMPEBase(seed, Config)
-    test_env_rollout(env)
+    base_kwargs = {"device": "cpu"}
+    #petting_zoo_env = petting_zoo_base.PettingZooMPEBase(seed, Config, base_kwargs)
+    #test_env_rollout(petting_zoo_env)
+    config = EnvConfig()
+    social_dilemma_env = SocialDilemmaEnv(seed, config, base_kwargs)
+    test_env_rollout(social_dilemma_env)

@@ -159,7 +159,7 @@ def gym_to_torchrl_spec_transform(
     
     if isinstance(spec, gym.spaces.tuple.Tuple):
         raise NotImplementedError("gym.spaces.tuple.Tuple mapping not yet implemented")
-    if isinstance(spec, gym.spaces.discrete.Discrete):
+    if isinstance(spec, gym.spaces.discrete.Discrete):        
         action_space_cls = (
             DiscreteTensorSpec
             if categorical_action_encoding
@@ -225,6 +225,7 @@ def gym_to_torchrl_spec_transform(
                 spec[k],
                 device=device,
                 categorical_action_encoding=categorical_action_encoding,
+                which_gym=which_gym,
             )
         return CompositeSpec(**spec_out)
     elif isinstance(spec, gym.spaces.dict.Dict):
@@ -232,6 +233,7 @@ def gym_to_torchrl_spec_transform(
             spec.spaces,
             device=device,
             categorical_action_encoding=categorical_action_encoding,
+            which_gym=which_gym,
         )
     else:        
         raise NotImplementedError(

@@ -44,17 +44,12 @@ class ExpConfig(BaseConfig):
 
 @typechecked
 class EnvConfig(BaseConfig):
-    def __init__(
-            self, 
-            agent_config: BaseConfig,
-            args: argparse.Namespace
-            ) -> None:
+    def __init__(self) -> None:
         self.env_name = "social_dilemma"
         self.task_name = "cleanup"
         self.env_class = SocialDilemmaEnv        
         self.env_kwargs = dict(
-            num_agents=2,
-            return_agent_actions=True,
+            num_agents=5,
             use_collective_reward=False,
             inequity_averse_reward=False,
             alpha=0.0,

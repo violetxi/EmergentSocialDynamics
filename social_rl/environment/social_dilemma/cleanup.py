@@ -1,10 +1,12 @@
 import numpy as np
 from numpy.random import rand
+from gym.spaces.discrete import Discrete
+from gym.spaces.box import Box
 
-from agent import CleanupAgent
-from gym_misc import DiscreteWithDType
-from map_env import MapEnv
-from maps import CLEANUP_MAP
+from social_rl.environment.social_dilemma.agent import CleanupAgent
+#from social_rl.environment.social_dilemma.gym_misc.discrete_with_dtype import DiscreteWithDType
+from social_rl.environment.social_dilemma.map_env import MapEnv
+from social_rl.environment.social_dilemma.maps import CLEANUP_MAP
 
 
 # Add custom actions to the agent
@@ -84,7 +86,14 @@ class CleanupEnv(MapEnv):
 
     @property
     def action_space(self):
-        return DiscreteWithDType(9, dtype=np.uint8)
+        #return DiscreteWithDType(9, dtype=np.uint8)
+        return Discrete(9)
+    
+    @property
+    def observation_space(self):
+        r, c = self.world_map.shape
+        return Box(low=0, high=255, shape=(r, c, 3), dtype=np.uint8)
+
 
     def custom_reset(self):
         """Initialize the walls and the waste"""
