@@ -11,7 +11,7 @@ from torchrl.envs.common import _EnvWrapper
 
 #import social_rl.environment.petting_zoo_base as petting_zoo_base
 from social_rl.environment.social_dilemma_env import SocialDilemmaEnv
-from social_rl.config.social_dilemma_configs.cleanup_config import EnvConfig
+from social_rl.config.social_dilemma_configs.cleanup_vanilla import EnvConfig
 
 
 @typechecked

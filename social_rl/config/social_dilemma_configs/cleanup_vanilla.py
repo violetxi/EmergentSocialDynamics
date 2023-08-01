@@ -4,6 +4,7 @@ Storage suggestion: store args information in a json file, along with the config
 both will provide the full configuration for the experiment.
 """
 import argparse
+import torch
 import torch.nn as nn
 from typeguard import typechecked
 from typing import Optional
@@ -17,7 +18,7 @@ from torchvision.transforms.v2 import (
 )
 from torchrl.data import (
     TensorDictReplayBuffer, 
-    LazyMemmapStorage
+    LazyTensorStorage
 )
 from torchrl.modules.tensordict_module.actors import (
     ProbabilisticActor,
@@ -39,7 +40,6 @@ from social_rl.agents.vanilla_agent import VanillaAgent
 
 
 # global constants for the environment and agents
-NUM_AGENTS = 2
 ACTION_DIM = 9
 # models
 LATENT_DIM = 128
@@ -121,7 +121,6 @@ class WmConfig(BaseConfig):
             activation_class=nn.ReLU,
             dropout=0.2,
             layer_class=nn.Linear,
-            device="cpu",
         )
         self.action_dim = ACTION_DIM
         self.wm_module_cls =  ConvWorldModel
@@ -188,10 +187,9 @@ class ReplayBufferConfig(BaseConfig):
         """
         self.buffer_class = TensorDictReplayBuffer
         self.batch_size = exp_config.batch_size
-        storage = LazyMemmapStorage(
+        storage = LazyTensorStorage(
             max_size=1e6,
-            scratch_dir=exp_config.log_dir,
-            device="cpu",
+            device="cuda" if torch.cuda.is_available() else "cpu",
         )
         self.buffer_kwargs = dict(
             batch_size=self.batch_size,
@@ -229,6 +227,9 @@ class Config(BaseConfig):
     def __init__(
             self,
             args: argparse.Namespace) -> None:
+        global NUM_AGENTS
+        NUM_AGENTS = args.num_agents
+        print(f"Number of agents: {NUM_AGENTS}")
         self.exp_config = ExpConfig(args)
         wm_config = WmConfig()
         actor_config = ActorConfig()        

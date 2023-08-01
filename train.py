@@ -68,6 +68,11 @@ def parse_args() -> argparse.Namespace:
         help='Number of steps to warm up the replay buffer'
     )
     parser.add_argument(
+        '--num_agents', type=int,
+        default=DEFAULT_ARGS['num_agents'],
+        help='Number of agents in the environment'
+    )
+    parser.add_argument(
         '--project_name', type=str,
         default=DEFAULT_ARGS['project_name'],
         help='Name of the project for wandb'
