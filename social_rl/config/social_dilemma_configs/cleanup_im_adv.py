@@ -140,8 +140,8 @@ class ActorConfig(BaseConfig):
         self.net_module = MLPModule
         self.net_kwargs = dict(
             in_features = 128,
-            out_features = 5 * 2,    # mean, std for action
-            num_cells = [128, 128],    # number of hidden units in each layer
+            out_features = ACTION_DIM * 2,    # mean, std for action
+            num_cells = [LATENT_DIM, LATENT_DIM],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )
@@ -149,7 +149,7 @@ class ActorConfig(BaseConfig):
         self.in_keys = ["latent"]
         self.intermediate_keys = ["logits"]
         self.out_keys = ["action"]
-        self.action_spec = OneHotDiscreteTensorSpec(5)
+        self.action_spec = OneHotDiscreteTensorSpec(ACTION_DIM)
         self.dist_class = OneHotCategorical
         self.wrapper_class = ProbabilisticActor
 
@@ -166,8 +166,8 @@ class QValueConfig(BaseConfig):
         self.net_module = MLPModule
         self.net_kwargs = dict(
             in_features = 128,    # use latent representation from world model
-            out_features = 5,    # value for actionss given current state
-            num_cells = [128, 128],    # number of hidden units in each layer
+            out_features = ACTION_DIM,    # value for actionss given current state
+            num_cells = [LATENT_DIM, LATENT_DIM],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
         )

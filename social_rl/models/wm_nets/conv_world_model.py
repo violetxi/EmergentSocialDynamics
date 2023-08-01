@@ -34,14 +34,15 @@ class ConvWorldModel(nn.Module):
     """
     def __init__(self, agent_idx, config):
         super(ConvWorldModel, self).__init__()
-        self.agent_idx = agent_idx
-        self.action_dim = config.action_dim
+        self.agent_idx = agent_idx                
         self.obs_encoder = ConvNet(**config.obs_encoder_kwargs)
         self.encoder_latent = MLP(**config.encoder_latent_net_kwargs)
         self.decoder_fc = MLP(**config.decoder_fc_kwargs)
         self.obs_decoder = DeconvNet(**config.obs_decoder_kwargs)
         self.action_head = MLP(**config.action_head_kwargs)
-        self.reward_head = MLP(**config.reward_head_kwargs) 
+        self.reward_head = MLP(**config.reward_head_kwargs)
+        self.action_dim = config.action_dim
+        self.num_agents = self.action_head.out_features // self.action_dim        
     
     def encode(self, x):
         x = self.obs_encoder(x)
@@ -82,25 +83,28 @@ class ConvWorldModel(nn.Module):
         args:
             pred_actions: predicted actions (B, N * A)
             actions: actions (B, N, A)
-        """        
+        """
         batch_size = pred_actions.shape[0]
         action_labels = torch.argmax(actions, dim=-1).reshape(-1)
-        pred_actions = pred_actions.reshape(-1, self.action_dim)
-        action_loss = nn.functional.cross_entropy(pred_actions, action_labels, reduction='none')
+        pred_actions = pred_actions.reshape(-1, self.action_dim)        
+        action_loss = nn.functional.cross_entropy(pred_actions, action_labels, reduction='none')        
         return action_loss.reshape(batch_size, -1)
     
     def compute_reward_loss(self, pred_rewards, reward):
         """
         Compute reward loss
-        """        
-        return torch.square(reward - pred_rewards)
+        """
+        max_neg_reward = 50 * (self.num_agents - 1)
+        pred_rewards_scaled = nn.functional.sigmoid(pred_rewards) \
+            * (max_neg_reward + 1) - max_neg_reward
+        reward_loss = torch.square(pred_rewards_scaled - reward)
+        return reward_loss
     
     def forward(self, obs, prev_actions, actions, next_obs, reward):
         """
         Forward pass
         """
-        batch_size = obs.shape[0]
-        #obs = obs[:, self.agent_idx]
+        batch_size = obs.shape[0]        
         latent = self.encode(obs)
         prev_actions = prev_actions.reshape(batch_size, -1)
         latent_prev_actions = torch.cat([latent, prev_actions], dim=-1)        
@@ -111,6 +115,7 @@ class ConvWorldModel(nn.Module):
         rep_loss = self.compute_rep_loss(pred_obs, next_obs)
         action_loss = self.compute_action_loss(pred_actions, actions)
         reward_loss = self.compute_reward_loss(pred_reward, reward)
+
         out_dict = dict(
             loss_dict=dict(
                 rep_loss=rep_loss,
@@ -215,9 +220,14 @@ class WorldModelTensorDictBase(tdnn.TensorDictModule):
         prev_action= self.convert_tensordict_to_tensor(
             tensordict.get('prev_action'), "action", self.action_dim
             ).to(tensordict.device)
-        reward = self.convert_tensordict_to_tensor(
-            tensordict.get(('next', 'reward')), "reward"
-            ).to(tensordict.device)
+        if 'extr_reward' in tensordict.keys():
+            reward = self.convert_tensordict_to_tensor(
+                tensordict.get('extr_reward'), "reward"
+                ).to(tensordict.device)
+        else:
+            reward = self.convert_tensordict_to_tensor(
+                tensordict.get(('next', 'reward')), "reward"
+                ).to(tensordict.device)
         
         wm_dict = self.module(obs, prev_action, action, next_obs, reward)        
         assert set(list(wm_dict.keys())) == set(self.out_keys), \
@@ -237,11 +247,11 @@ class WorldModelTensorDictBase(tdnn.TensorDictModule):
         loss_dict =  tensordict_out['loss_dict']
         rep_loss = loss_dict['rep_loss'].mean()
         action_loss = loss_dict['action_loss'].mean()
-        reward_loss = loss_dict['reward_loss'].mean()
-        
-        loss = action_loss + action_loss + reward_loss        
+        reward_loss = loss_dict['reward_loss'].mean()    
+        loss = rep_loss + action_loss + reward_loss
+
         loss_dict = {
-            'rep_loss': rep_loss,            
+            'rep_loss': rep_loss,
             'action_loss': action_loss,
             'reward_loss': reward_loss,
             'loss': loss
