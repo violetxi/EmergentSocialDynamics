@@ -220,7 +220,7 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
         """        
         if tensordict_out is None:
             tensordict_out = tensordict.clone()
-
+            
         # obs: torch.Tensor, actions: torch.Tensor, 
         # prev_actions: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:        
         obs = convert_tensordict_to_tensor(
@@ -237,7 +237,7 @@ class MLPDynamicsTensorDictModel(tdnn.TensorDictModule):
             ).to(tensordict.device)        
         wm_dict = self.module(obs, action, prev_action, next_obs)
 
-        assert list(wm_dict.keys()) == self.out_keys, \
+        assert set(list(wm_dict.keys())) == set(self.out_keys), \
             "The output keys of the module must match the out_keys of the TensorDictModel."
         
         for k in self.out_keys:

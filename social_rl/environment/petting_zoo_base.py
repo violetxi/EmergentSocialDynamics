@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from types import ModuleType
 from typeguard import typechecked
 
@@ -169,6 +169,11 @@ class PettingZooMPEBase(_EnvWrapper):
         # https://github.com/pytorch/rl/blob/e21e4cf9c5e557957b5a14cf611a81f15e12dc2c/torchrl/envs/common.py#L614
         reward_spec = reward_spec.unsqueeze(0) # add batch dim
         self.reward_spec = reward_spec
+
+
+    def get_agent_ids(self) -> List[str]:
+        """Return list of agent ids"""
+        return self._env.agents
 
 
     def render(self):

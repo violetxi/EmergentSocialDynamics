@@ -270,7 +270,7 @@ class Trainer:
 
     def _init_agents(self) -> None:
         agent_config = self.config.agent_config
-        agent_ids = self.env._env.agents    # get agent ids from env
+        agent_ids = self.env.get_agent_ids()
         assert len(agent_ids) == agent_config.num_agents, \
             f"Number of agents in env ({len(agent_ids)}) does not match number of agents in config ({agent_config.num_agents})"
         

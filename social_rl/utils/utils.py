@@ -120,10 +120,8 @@ def load_config_from_path(path: str, args: argparse.Namespace) -> BaseConfig:
     Load config from path, assuming config is a python file with class Config,  
     and all parameters are defined as class attributes
     """
-    base_lib_path = 'social_rl.config.'
-    config_name = os.path.basename(path).split('.')[0]
-    config_path = base_lib_path + config_name
-    config = __import__(config_path, fromlist=['*'])
+    config_lib_path = path.split('.')[0].replace('/', '.')
+    config = __import__(config_lib_path, fromlist=['*'])
     return config.Config(args)
     
     
@@ -262,7 +260,7 @@ def convert_tensordict_to_tensor(
     td_type: str,
     action_dim: Optional[int] = None,
     ) -> torch.Tensor:
-    """Convert a tensordict to a torch tensor
+    """Convert a tensordict to a torch tensor this is only useful for MPE environments
     Args:
         tensordict (td.TensorDict): a tensordict
         td_type (str): the type of tensordict (obs, act, rew etc)

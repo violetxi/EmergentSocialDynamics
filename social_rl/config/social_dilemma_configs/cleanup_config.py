@@ -1,4 +1,4 @@
-""" Default configuration for simple_tag_v3 environment. Using .py file because it's easier to 
+""" Default configuration for cleanup environment. Using .py file because it's easier to 
 pass around python objects (e.g. class Config) than json/yaml files.
 Storage suggestion: store args information in a json file, along with the config.py file path, combining 
 both will provide the full configuration for the experiment.
@@ -30,12 +30,19 @@ from torchrl.modules.distributions.continuous import NormalParamWrapper
 
 from social_rl.models.cores import MLPModule
 from social_rl.config.base_config import BaseConfig
-from social_rl.models.wm_nets.mlp_dynamics_model import (
-    MLPDynamicsModel,
-    MLPDynamicsTensorDictModel
+from social_rl.models.wm_nets.conv_world_model import (
+    ConvWorldModel,
+    WorldModelTensorDictBase
 )
 from social_rl.environment.social_dilemma_env import SocialDilemmaEnv
 from social_rl.agents.vanilla_agent import VanillaAgent
+
+
+# global constants for the environment and agents
+NUM_AGENTS = 2
+ACTION_DIM = 9
+# models
+LATENT_DIM = 128
 
 
 
@@ -60,13 +67,68 @@ class EnvConfig(BaseConfig):
             Grayscale()
         ])
         self.env_kwargs = dict(
-            num_agents=5,
+            num_agents=NUM_AGENTS,
             use_collective_reward=False,
             inequity_averse_reward=False,
             alpha=0.0,
             beta=0.0,
         )
 
+
+@typechecked
+class WmConfig(BaseConfig):
+    def __init__(self) -> None:
+        self.obs_encoder_kwargs = dict(
+            in_features=1,    # grayscale, but the actual implemenation should include N stacked frames
+            num_cells=[32, 32, 32, 32],
+            kernel_sizes=[5, 3, 3, 3],
+            strides=1,
+            activation_class=nn.ReLU,
+            )
+        self.encoder_latent_net_kwargs = dict(
+            in_features=800,    # flattened conv output dim
+            out_features=LATENT_DIM,
+            num_cells=[LATENT_DIM, LATENT_DIM],
+            activation_class=nn.ReLU,
+            )
+        self.decoder_fc_kwargs = dict(
+            in_features=LATENT_DIM + ACTION_DIM * NUM_AGENTS,    # (latent, prev_actions)
+            out_features=800,
+            num_cells=[LATENT_DIM, LATENT_DIM],
+            activation_class=nn.ReLU,
+            )                    
+        self.obs_decoder_kwargs = dict(
+            in_features=32,
+            out_features=1,
+            num_cells=[32, 32, 32, 32],
+            kernel_sizes=[3, 3, 3, 3],           
+            strides=1,
+            paddings=0,
+            activation_class=nn.ReLU,        
+            )
+        self.action_head_kwargs = dict(
+            in_features=LATENT_DIM + ACTION_DIM * NUM_AGENTS,    # (latent, prev_actions)
+            out_features=ACTION_DIM * NUM_AGENTS,
+            num_cells=[LATENT_DIM, LATENT_DIM],
+            activation_class=nn.ReLU,
+            dropout=0.2,
+            layer_class=nn.Linear,
+            )
+        self.reward_head_kwargs = dict(
+            in_features=LATENT_DIM + ACTION_DIM * NUM_AGENTS,    # (latent, predicted actions)
+            out_features=1,
+            num_cells=[LATENT_DIM, LATENT_DIM],
+            activation_class=nn.ReLU,
+            dropout=0.2,
+            layer_class=nn.Linear,
+            device="cpu",
+        )
+        self.action_dim = ACTION_DIM
+        self.wm_module_cls =  ConvWorldModel
+        self.in_keys = [
+            "observation", "action", "prev_action", ("next", "observation")]
+        self.out_keys = ["latent", "loss_dict"]
+        self.wrapper_class = WorldModelTensorDictBase
 
 
 @typechecked
@@ -139,44 +201,6 @@ class ReplayBufferConfig(BaseConfig):
 
 
 @typechecked
-class WmConfig(BaseConfig):
-    def __init__(self) -> None:
-        self.backbone_kwargs = dict(
-            in_features=24+5,    # observation + action
-            out_features=128,
-            num_cells=[128, 128],
-            activation_class=nn.ReLU,
-            dropout=0.2,
-            layer_class=nn.Linear,
-            device="cpu",
-        )
-        self.obs_head_kwargs = dict(
-            in_features=128,
-            out_features=24,
-            num_cells=[128, 128],
-            activation_class=nn.ReLU,
-            dropout=0.2,
-            layer_class=nn.Linear,
-            device="cpu",
-        )
-        self.action_head_kwargs = dict(
-            in_features=128,
-            out_features=5,
-            num_cells=[128, 128],
-            activation_class=nn.ReLU,
-            dropout=0.2,
-            layer_class=nn.Linear,
-            device="cpu",
-        )
-        self.wm_module_cls =  MLPDynamicsModel
-        self.in_keys = [
-            "observation", "action", "prev_action", ("next", "observation")]
-        self.out_keys = ["latent", "loss_dict"]
-        self.wrapper_class = MLPDynamicsTensorDictModel
-
-
-
-@typechecked
 class AgentConfig(BaseConfig):
     def __init__(
             self,
@@ -186,7 +210,7 @@ class AgentConfig(BaseConfig):
             replay_buffer_config: BaseConfig,
             value_config: Optional[BaseConfig] = None
         ) -> None:
-        self.num_agents = 4
+        self.num_agents = NUM_AGENTS
         self.actor_config = actor_config
         self.lr_actor = 1e-4
         self.value_config = value_config
@@ -216,4 +240,4 @@ class Config(BaseConfig):
             wm_config,
             replay_buffer_config
         )
-        self.env_config = EnvConfig(self.agent_config, args)        
+        self.env_config = EnvConfig()

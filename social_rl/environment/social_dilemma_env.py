@@ -1,6 +1,5 @@
 import numpy as np
-from typing import Dict, Optional
-from types import ModuleType
+from typing import Dict, Optional, List
 from typeguard import typechecked
 
 import gym
@@ -169,6 +168,9 @@ class SocialDilemmaEnv(_EnvWrapper):
         reward_spec = reward_spec.unsqueeze(0) # add batch dim
         self.reward_spec = reward_spec
 
+
+    def get_agent_ids(self) -> List[str]:
+        return list(self._env.agents.keys())
 
     def render(self):
         """Return rendered rgb_array (c, w, h)"""

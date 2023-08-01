@@ -74,8 +74,6 @@ class AdversarialWMAgent(BaseAgent):
         else:
             # after initial time step, agent uses world model to predict next state
             # at this point tensordict has observation, action, next_obs, next_action, prev_action
-            #tensordict_wm = self.world_model(tensordict)
-            #tensordict_out = self.actor(tensordict_wm)
             loss_dict, tensordict = self.world_model.loss(tensordict)
             tensordict = self.actor(tensordict)
             if hasattr(self, "intr_reward_weight") and self.intr_reward_weight > 0:                

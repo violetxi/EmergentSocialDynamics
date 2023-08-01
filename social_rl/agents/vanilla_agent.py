@@ -34,7 +34,7 @@ class VanillaAgent(BaseAgent):
         super().__init__(
             agent_idx, 
             agent_id, 
-            actor,              
+            actor,
             qvalue, 
             world_model, 
             replay_buffer,
