@@ -13,8 +13,9 @@ import torchvision
 torchvision.disable_beta_transforms_warning()    # v2 modules are still in beta, disable beta warning
 from torchvision.transforms.v2 import (
     Compose, 
-    Grayscale, 
-    ToTensor
+    Grayscale,
+    ToImageTensor,
+    ConvertImageDtype 
 )
 from torchrl.data import (
     TensorDictReplayBuffer, 
@@ -62,9 +63,10 @@ class EnvConfig(BaseConfig):
         self.env_name = "social_dilemma"
         self.task_name = "cleanup"
         self.env_class = SocialDilemmaEnv
-        self.tranforms = Compose([            
-            ToTensor(),
-            Grayscale()
+        self.tranforms = Compose([
+            ToImageTensor(),    
+            Grayscale(),         
+            ConvertImageDtype(torch.float32),
         ])
         self.env_kwargs = dict(
             num_agents=NUM_AGENTS,

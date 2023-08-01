@@ -125,6 +125,7 @@ class DeconvNet(nn.Module):
                     bias=False
                 )
             )
+        layers.append(nn.Sigmoid())
         return layers
     
 
