@@ -485,7 +485,7 @@ class Trainer:
                 for agent_id, agent in self.agents.items():
                     # swtich to train mode for learning
                     agent.set_train()  
-                    tensordict_batch = agent.replay_buffer.sample().to(self.device)                
+                    tensordict_batch = agent.replay_buffer.sample().to(self.device)                          
                     wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
                     tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
                     actor_loss_dict = agent.update_actor_grads(tensordict_actor)
