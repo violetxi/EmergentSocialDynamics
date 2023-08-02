@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         help='Path to folder containing model checkpoints'
     )
     parser.add_argument(
+        '--eval_ep_len', type=int,
+        default=DEFAULT_ARGS['eval_ep_len'],
+        help='Number of steps to evaluate for'
+    )
+    parser.add_argument(
         '--result_folder', type=str,
         default='./results',
         help='Path to folder to save results'
@@ -284,7 +289,7 @@ class RunEvaluation:
             print(f">>>>>>>>>>>>>>>>>>>>>>>> Evaluating run {run} with seed {run_seed}")
             done = False
             i = 0            
-            for i in tqdm(range(self.train_args.max_episode_len)): #tqdm(range(20)):
+            for i in tqdm(range(self.args.eval_ep_len)):
                 tensordict, rgb_obs = self.get_actions(tensordict.to(self.device))                
                 run_frames.append(rgb_obs)                
                 done = tensordict.get("done").item()

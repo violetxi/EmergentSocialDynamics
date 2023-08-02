@@ -9,6 +9,7 @@ DEFAULT_ARGS = {
     'max_episode_len': int(5e3),
     'warm_up_steps': int(3e3),
     'num_agents': 2,
+    'eval_ep_len': int(3e3),
     # wandb info
     'project_name': 'emergent-social-dynamics',
     'centralized_agent_list': ['SocialInfluenceAgent']
