@@ -169,7 +169,7 @@ class QValueConfig(BaseConfig):
             num_cells = [LATENT_DIM, LATENT_DIM],    # number of hidden units in each layer
             activation_class = nn.ReLU,
             layer_class = nn.Linear
-        )
+            )
         self.in_keys = ['latent']
         self.out_keys = ['state_value']
         self.wrapper_class = ValueOperator

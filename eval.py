@@ -8,6 +8,7 @@ import cv2
 import argparse
 import pickle
 import numpy as np
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from defaults import DEFAULT_ARGS
 from typeguard import typechecked
@@ -54,7 +55,12 @@ def parse_args() -> argparse.Namespace:
         '--eval_ckpt_type', type=str,
         default='last',
         help='Type of checkpoint to evaluate, can be last or every n'
-    )    
+    )
+    parser.add_argument(
+        '--num_agents', type=int,
+        default=DEFAULT_ARGS['num_agents'],
+        help='Number of agents in the environment'
+    )
     args = parser.parse_args()
     return args
 
@@ -70,7 +76,8 @@ class RunEvaluation:
             ) -> None:
         self.args = args
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.train_args = self._recreate_train_args() 
+        self.train_args = self._recreate_train_args()
+        self.train_args.num_agents = args.num_agents
         self.config = load_config_from_path(args.config_path, self.train_args)
         self._init_env()
         self._init_agents()
@@ -96,16 +103,16 @@ class RunEvaluation:
         and the test_environment used to validate model during training
         """
         seed = self._get_random_seed()
-        env_config = self.config.env_config
-        env_config.env_kwargs['render_mode']='rgb_array'        
+        env_config = self.config.env_config        
         self.env_name = env_config.env_name
         env_class = env_config.env_class                
         # Do not use batch_size for environment
         kwargs = {
             "device": self.device
         }
-        self.env = env_class(seed, env_config, kwargs)
+        self.env = env_class(seed, env_config, kwargs)     
         print(f"Finished initializing {self.env_name} environment with seed {seed}")
+        self.agent_colors = self.env.get_agent_colors()
 
 
     def _init_agent(
@@ -205,18 +212,21 @@ class RunEvaluation:
         ckpt_files = [
             f for f in os.listdir(self.args.model_folder) if f.endswith(".pth") 
             and ("agent" in f or "adversary" in f)
-            ]
-        eps = [int(f.split("_")[2][2:]) for f in ckpt_files]
+            ]        
+
+        #eps = [int(f.split("_")[2][2:]) for f in ckpt_files]    #(when agent id contains '_')
+        eps = [int(f.split("_")[1][2:]) for f in ckpt_files]    #(when agent id contains '-')
         if self.args.eval_ckpt_type == "last":
             ckpt_ep = f"ep{np.max(eps)}"
         ckpt_files = [f for f in ckpt_files if ckpt_ep in f]
-        ckpt_f_dict = {"_".join(f.split("_")[:2]): f for f in ckpt_files}
+        #ckpt_f_dict = {"_".join(f.split("_")[:2]): f for f in ckpt_files}    #(when agent id contains '_')
+        ckpt_f_dict = {"_".join(f.split("_")[:1]): f for f in ckpt_files}    #(when agent id contains '-')
         return ckpt_f_dict
     
 
     def _init_agents(self) -> None:
         agent_config = self.config.agent_config
-        agent_ids = self.env._env.agents
+        agent_ids = self.env.get_agent_ids()
         assert len(agent_ids) == agent_config.num_agents, \
             f"Number of agents in env ({len(agent_ids)}) does not match number of agents in config ({agent_config.num_agents})"
 
@@ -255,11 +265,6 @@ class RunEvaluation:
                 
         tensordict["action"] = deepcopy(actions)
         tensordict = self.env.step(tensordict.detach().cpu())
-        # Add logging for landmark positions        
-        # env = self.env._env.aec_env.env
-        # for agent in env.world.agents:
-        #     for i, landmark in enumerate(env.world.landmarks):
-        #         print(f"Landmark {i} position for agent {agent.name}: {landmark.state.p_pos}")
 
         rgb_obs = self.env.render()
         tensordict["prev_action"] = deepcopy(actions)
@@ -297,13 +302,37 @@ class RunEvaluation:
         data = {agent_name : episode_rewards}
         self.save_results(data, episode_frames)
 
+    
+    def render_reward_curve(self, rewards_dict, cur_steps, max_steps):        
+        """Render reward curve as an image"""
+        fig, ax = plt.subplots()        
+        for agent_id, rewards in rewards_dict.items():
+            ax.plot(
+                rewards[:cur_steps], 
+                label=f"Agent {agent_id}", 
+                color=self.agent_colors[agent_id],
+                alpha=0.5)
+
+        ax.set_title("Reward at Each Step for Each Agent")
+        ax.set_xlabel("Steps")
+        ax.set_ylabel("Reward")
+        ax.set_xlim([0, max_steps])  # Set x-axis limits
+        ax.legend()  # Add a legend
+
+        fig.canvas.draw()
+        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        plt.close(fig)
+        return image
+
+
 
     def save_results(
             self, 
             data: Dict[str, Union[str, List[Dict[str, List[float]]]]],
             episode_frames: Optional[List[List[np.ndarray]]] = None
             ) -> None:
-        ensure_dir(self.args.result_folder)
+        ensure_dir(self.args.result_folder)        
         filename = f"{self.config.env_config.env_name}-{self.config.env_config.task_name}"
         result_path = os.path.join(self.args.result_folder, f"{filename}.pkl")
 
@@ -323,23 +352,37 @@ class RunEvaluation:
         ensure_dir(video_folder)
         model_name = self.config.agent_config.agent_class.__name__
         for i, run_frames in enumerate(episode_frames):
-            video_path = os.path.join(video_folder, f"{model_name}-run_{i}.mp4")          
-            self.save_video(run_frames, video_path)
+            video_path = os.path.join(video_folder, f"{model_name}-run_{i}.mp4")
+            self.save_video(run_frames, data[model_name][i], video_path)
 
 
-        # write a function to save list of frames to video
-    def save_video(self, frames: List[np.ndarray], filename: str) -> None:
+    # write a function to save list of frames to video
+    def save_video(
+            self, 
+            frames: List[np.ndarray], 
+            rewards: Dict[str, List],
+            filename: str
+            ) -> None:
         """Save frames to video
         Args:
             frames: list of frames
             filename: filename to save video to
         """
         print(f"Saving video to {filename}..")
-        height, width, layers = frames[0].shape
+        #height, width, layers = frames[0].shape
+        height = 500
+        width = 300
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        video = cv2.VideoWriter(filename, fourcc, 30, (width, height))
-        for frame in frames:
-            video.write(frame.swapaxes(0, 1))
+        video = cv2.VideoWriter(filename, fourcc, 10, (width*2, height))
+        max_steps = len(frames)
+        for i, frame in enumerate(frames): 
+            reward_img = self.render_reward_curve(rewards, i, max_steps)
+            reward_img = cv2.resize(reward_img, (width, height), interpolation=cv2.INTER_AREA)
+            reward_img.astype('uint8')
+            frame = frame.astype('uint8')
+            frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+            combined_frame = cv2.hconcat([frame, reward_img])
+            video.write(combined_frame)
         cv2.destroyAllWindows()
         video.release()
 

@@ -172,6 +172,17 @@ class SocialDilemmaEnv(_EnvWrapper):
     def get_agent_ids(self) -> List[str]:
         return list(self._env.agents.keys())
 
+    def get_agent_colors(self) -> Dict[str, np.ndarray]:
+        # get agent colors from the environment, used for plotting
+        agent_colors = {
+           agent_id: self._env.color_map[str(
+            int(agent_id.split('-')[1]) + 1
+            ).encode()] / 255.0
+           for agent_id in self._env.agents.keys()
+        }
+        return agent_colors
+        
+
     def render(self):
         """Return rendered rgb_array (c, w, h)"""
         return self._env.render(mode='rgb_array')
