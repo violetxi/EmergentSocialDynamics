@@ -124,7 +124,7 @@ class VanillaAgentMF(BaseAgent):
             self.actor, 
             self.qvalue, 
             num_actions=self.actor.spec["action"].space.n
-        )
+        )        
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.lr_actor)        
         self.qvalue_optimizer = torch.optim.Adam(self.qvalue.parameters(), lr=self.config.lr_qvalue)
         if hasattr(self, "value"):

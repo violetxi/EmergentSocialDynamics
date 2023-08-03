@@ -116,8 +116,8 @@ class Trainer:
 
     def _init_save_postfix(self) -> str:
         postfix = ""
-        for arg, default_value in DEFAULT_ARGS.items():
-            if arg != "centralized_agent_list":
+        for arg, default_value in DEFAULT_ARGS.items():                      
+            if arg != "centralized_agent_list" and arg != "eval_ep_len":
                 current_value = getattr(args, arg)
                 if current_value != default_value:
                     postfix += f'-{arg}_{current_value}'
