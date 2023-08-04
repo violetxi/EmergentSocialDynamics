@@ -434,6 +434,8 @@ for frame in tqdm(range(init_random_frames)):
 td = test_env.reset()
 for frame in tqdm(range(total_frames)):
     td = actor(td.clone())
+    td = test_env.step(td.clone())
+    step_reward = td.get(("next", "reward"))
     rb.add(td.clone())
 
     td_batch = rb.sample()
@@ -443,8 +445,8 @@ for frame in tqdm(range(total_frames)):
     loss.backward()
     optimizer.step()
     target_net_updater.step()
-    mean_batch_reward = td_batch.get(("next", "reward")).mean()
+    
     if frame % 1000 == 0:
-        print(f"At step {frame}, loss: {loss.item():.3f}, mean batch reward: {mean_batch_reward}")
+        print(f"At step {frame}, loss: {loss.item():.3f}, reward: {step_reward}")
 
 
