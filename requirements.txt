@@ -6,7 +6,7 @@ torch
 torchvision
 wandb
 pettingzoo[all]
-torchrl
+#torchrl
 pytest
 pyyaml
 pytest-instafail
