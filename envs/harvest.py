@@ -3,7 +3,6 @@ from numpy.random import rand
 
 from gym.spaces import Discrete
 from envs.agent import HarvestAgent
-from envs.gym.discrete_with_dtype import DiscreteWithDType
 from envs.map_env import MapEnv
 from maps import HARVEST_MAP
 

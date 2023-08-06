@@ -5,7 +5,7 @@ from envs.pettingzoo_env import ssd_parallel_env
 
 
 def test_env_render(env_name):    
-    creator = env_creator.get_env_creator(
+    raw_env = env_creator.get_env_creator(
         env=env_name,
         num_agents=2,
         use_collective_reward=False,
@@ -13,15 +13,16 @@ def test_env_render(env_name):
         alpha=0.0,
         beta=0.0
     )
-    raw_env = creator(None)
     env = ssd_parallel_env(raw_env, max_cycles=1000)
+    #env = raw_env
     env.reset()
     n_steps = 300
     frames = []
     for step in range(n_steps):
         actions = {}
-        for agent_id in env.agents:            
-            actions[agent_id] = env.action_spaces[agent_id].sample()
+        for agent_id in env.agents:
+            actions[agent_id] = env.action_spaces[agent_id].sample()    # parallel env
+            #actions[agent_id] = env.action_space.sample()    # raw env
         obs, rewards, done, info = env.step(actions)
         frames.append(env.render(mode="rgb_array"))
         #print(f"Step: {step} | Obs: {obs} | Rewards: {rewards} | Done: {done} | Info: {info}")
@@ -42,5 +43,3 @@ def test_env_render(env_name):
 if __name__ == "__main__":
     test_env_render("harvest")
     test_env_render("cleanup")
-    #test_env_ray("harvest")
-    #test_env_ray("cleanup")

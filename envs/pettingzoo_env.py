@@ -1,8 +1,18 @@
+import functools
+
+import numpy as np
+
+from pettingzoo import AECEnv
+from pettingzoo.utils import agent_selector, wrappers
+
+from envs.cleanup import CleanupEnv
+from envs.harvest import HarvestEnv
+
 from functools import lru_cache
 
 from gym.utils import EzPickle
 from pettingzoo.utils import wrappers
-from pettingzoo.utils.conversions import from_parallel_wrapper
+from pettingzoo.utils.conversions import parallel_to_aec
 from pettingzoo.utils.env import ParallelEnv
 
 from envs.env_creator import get_env_creator
@@ -15,7 +25,7 @@ def parallel_env(max_cycles=MAX_CYCLES, **ssd_args):
 
 
 def raw_env(max_cycles=MAX_CYCLES, **ssd_args):
-    return from_parallel_wrapper(parallel_env(max_cycles, **ssd_args))
+    return parallel_to_aec(parallel_env(max_cycles, **ssd_args))
 
 
 def env(max_cycles=MAX_CYCLES, **ssd_args):
@@ -68,3 +78,5 @@ class _parallel_env(ssd_parallel_env, EzPickle):
         EzPickle.__init__(self, max_cycles, **ssd_args)
         env = get_env_creator(**ssd_args)(ssd_args["num_agents"])
         super().__init__(env, max_cycles)
+
+

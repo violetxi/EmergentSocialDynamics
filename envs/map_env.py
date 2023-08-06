@@ -4,8 +4,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from gym.spaces import Box, Dict
-#from ray.rllib.agents.callbacks import DefaultCallbacks
-#from ray.rllib.env import MultiAgentEnv
+
+
 
 _MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
@@ -56,7 +56,7 @@ DEFAULT_COLOURS = {
 #         |
 
 
-#class MapEnv(MultiAgentEnv):
+
 class MapEnv:
     def __init__(
         self,
@@ -919,7 +919,3 @@ class MapEnv:
             ],
             dtype=np.uint8,
         )
-
-    # @staticmethod
-    # def get_environment_callbacks():
-    #     return DefaultCallbacks
