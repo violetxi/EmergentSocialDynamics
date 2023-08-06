@@ -105,8 +105,7 @@ class parallel_env(ParallelEnv):
                 'observation': ob, 
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-        truncations = {agent: False for agent in self.agents}       
-        breakpoint()
+        truncations = {agent: False for agent in self.agents}
         return observations, rewards, terminations, truncations, infos
 
 

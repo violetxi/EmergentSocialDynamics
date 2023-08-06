@@ -22,8 +22,9 @@ def test_env_render(env_name):
         for agent_id in env.agents:
             actions[agent_id] = env._env.action_space.sample()    # parallel env
             #actions[agent_id] = env.action_space.sample()    # raw env
-        obs, rewards, done, info = env.step(actions)
-        frames.append(env.render(mode="rgb_array"))
+        #obs, rewards, done, info = env.step(actions)
+        obs, rewards, done, truncations, info = env.step(actions)
+        frames.append(env.render())
         #print(f"Step: {step} | Obs: {obs} | Rewards: {rewards} | Done: {done} | Info: {info}")
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
