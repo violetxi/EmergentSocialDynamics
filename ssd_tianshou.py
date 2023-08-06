@@ -13,17 +13,26 @@ git+https://github.com/thu-ml/tianshou
 from tianshou.data import Collector
 from tianshou.env import DummyVectorEnv, PettingZooEnv
 from tianshou.policy import MultiAgentPolicyManager, RandomPolicy
+from pettingzoo.utils.conversions import parallel_to_aec
 
-#from pettingzoo.classic import rps_v2
-from envs.env_creator import get_env_creator
-from envs.pettingzoo_env import ssd_parallel_env
+import envs.env_creator as env_creator
+from pettingzoo_env import parallel_env
 
 
 
 if __name__ == "__main__":
-    # Step 1: Load the PettingZoo environment
-    env = rps_v2.env(render_mode="rgb_array")    
-
+    # Step 1: Load ssd environment
+    env_name = "harvest"
+    env_args = dict(
+        env=env_name,
+        num_agents=2,
+        use_collective_reward=False,
+        inequity_averse_reward=False,
+        alpha=0.0,
+        beta=0.0
+    )    
+    env = parallel_env(env_args, render_mode="rgb_array")
+    env = parallel_to_aec(env)
     # Step 2: Wrap the environment for Tianshou interfacing
     env = PettingZooEnv(env)
 
@@ -37,7 +46,8 @@ if __name__ == "__main__":
     collector = Collector(policies, env)
 
     # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
-    result = collector.collect(n_episode=10, render=0.1)
+    result = collector.collect(n_step=1000)
+    breakpoint()
 
 
 # import os

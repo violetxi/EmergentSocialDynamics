@@ -4,7 +4,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from gym.spaces import Box, Dict
-
+from pettingzoo import AECEnv
 
 
 _MAP_ENV_ACTIONS = {

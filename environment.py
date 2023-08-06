@@ -1,11 +1,11 @@
 import cv2
 import numpy as np
 import envs.env_creator as env_creator
-from envs.pettingzoo_env import ssd_parallel_env
+from pettingzoo_env import parallel_env
 
 
 def test_env_render(env_name):    
-    raw_env = env_creator.get_env_creator(
+    env_args = dict(
         env=env_name,
         num_agents=2,
         use_collective_reward=False,
@@ -13,15 +13,14 @@ def test_env_render(env_name):
         alpha=0.0,
         beta=0.0
     )
-    env = ssd_parallel_env(raw_env, max_cycles=1000)
-    #env = raw_env
+    env = parallel_env(env_args, render_mode="rgb_array")
     env.reset()
     n_steps = 300
     frames = []
     for step in range(n_steps):
         actions = {}
         for agent_id in env.agents:
-            actions[agent_id] = env.action_spaces[agent_id].sample()    # parallel env
+            actions[agent_id] = env._env.action_space.sample()    # parallel env
             #actions[agent_id] = env.action_space.sample()    # raw env
         obs, rewards, done, info = env.step(actions)
         frames.append(env.render(mode="rgb_array"))
