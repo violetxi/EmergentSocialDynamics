@@ -46,7 +46,7 @@ if __name__ == "__main__":
     collector = Collector(policies, env)
 
     # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
-    result = collector.collect(n_step=1000)
+    result = collector.collect(n_episode=2)
     breakpoint()
 
 

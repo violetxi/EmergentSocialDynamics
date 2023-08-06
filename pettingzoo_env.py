@@ -19,6 +19,7 @@ class parallel_env(ParallelEnv):
     def __init__(
             self, 
             env_kwargs: Dict[str, Any],
+            max_cycles: int =1000,            
             render_mode: str =None,            
             ) -> None:
         """
@@ -35,7 +36,9 @@ class parallel_env(ParallelEnv):
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents))))
         )
+        self.max_cycles = max_cycles
         self.render_mode = render_mode
+        self.steps = 0
 
     # Observation space should be defined here.
     # lru_cache allows observation and action spaces to be memoized, reducing clock cycles required to get each agent's space.
@@ -93,12 +96,15 @@ class parallel_env(ParallelEnv):
         step(action) takes in an action for each agent and should return the
         - observations
         - rewards
-        - terminations
+        - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
         - truncations
         - info
         dicts where each dict looks like {agent_1: item_1, agent_2: item_2}
         """
-        obs, rewards, terminations, infos  = self._env.step(actions)          
+        self.steps += 1
+        obs, rewards, terminations, infos  = self._env.step(actions)
+        if self.steps >= self.max_cycles:
+            terminations = {agent: True for agent in self.agents}
         observations = {}
         for agent_id, ob in obs.items():
             observations[agent_id] = {
