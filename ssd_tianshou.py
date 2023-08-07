@@ -8,172 +8,153 @@ Requirements:
 pettingzoo == 1.22.0
 git+https://github.com/thu-ml/tianshou
 """
+import os
 
+import torch
+from torch import nn
+from torchvision.transforms import (    
+    Compose, 
+    ToPILImage,
+    Grayscale, 
+    ToTensor    
+)
 
-from tianshou.data import Collector
+from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv, PettingZooEnv
-from tianshou.policy import MultiAgentPolicyManager, RandomPolicy
+from tianshou.policy import MultiAgentPolicyManager, RandomPolicy, DQNPolicy
+from tianshou.utils.net.common import ActorCritic, DataParallelNet, Net
+from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.trainer import offpolicy_trainer
 from pettingzoo.utils.conversions import parallel_to_aec
 
-import envs.env_creator as env_creator
 from pettingzoo_env import parallel_env
 
 
-
-if __name__ == "__main__":
+def get_env(env_name, env_kwargs):
     # Step 1: Load ssd environment
+    env = parallel_env(env_args, render_mode="rgb_array")
+    env = parallel_to_aec(env)
+    # Step 2: Wrap the environment for Tianshou interfacing
+    env = PettingZooEnv(env)
+    return env
+
+
+class CNN(nn.Module):
+    def __init__(self, action_shape):
+        super(CNN, self).__init__()
+        self.model = nn.Sequential(
+            nn.Conv2d(1, 6, 3, stride=1),
+            nn.ReLU(),            
+            nn.Flatten(),
+            nn.Linear(1014, 32),
+            nn.ReLU(),
+            nn.Linear(32, action_shape),                        
+        )
+        self.preprocessing = self.tranforms = Compose([
+            ToPILImage(),
+            Grayscale(),
+            ToTensor(),                         
+        ])
+
+    def forward(self, obs, state=None, info={}):
+        transformed_obs = torch.stack(
+            [self.preprocessing(ob) for ob in obs.curr_obs])
+        logits = self.model(transformed_obs)
+        return logits, state
+
+
+
+if __name__ == "__main__":    
     env_name = "harvest"
     env_args = dict(
         env=env_name,
-        num_agents=2,
+        num_agents=1,
         use_collective_reward=False,
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0
     )    
-    env = parallel_env(env_args, render_mode="rgb_array")
-    env = parallel_to_aec(env)
-    # Step 2: Wrap the environment for Tianshou interfacing
-    env = PettingZooEnv(env)
+    env = get_env(env_name, env_args)
+    train_envs = DummyVectorEnv([lambda : env])
+    test_envs = DummyVectorEnv([lambda : env])
+    net = CNN(env.action_space.n)
+    optim = torch.optim.Adam(net.parameters(), lr=1e-4)
+    dqn_agent = DQNPolicy(
+        net, 
+        optim, 
+        discount_factor=0.9, 
+        estimation_step=3, 
+        target_update_freq=320
+        )
+    all_agents = [dqn_agent]
+    policy = MultiAgentPolicyManager(all_agents, env)
+    agents = env.agents
 
     # Step 3: Define policies for each agent
-    policies = MultiAgentPolicyManager([RandomPolicy(), RandomPolicy()], env)
+    #policies = MultiAgentPolicyManager([RandomPolicy(), RandomPolicy()], env)
+    # policies = MultiAgentPolicyManager([RandomPolicy()], env)
 
-    # Step 4: Convert the env to vector format
-    env = DummyVectorEnv([lambda: env])
+    # # Step 4: Convert the env to vector format
+    # env = DummyVectorEnv([lambda: env])
 
-    # Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
-    collector = Collector(policies, env)
+    # # Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
+    # collector = Collector(policies, env)
 
-    # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
-    result = collector.collect(n_episode=2)
-    breakpoint()
+    # # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
+    # result = collector.collect(n_episode=2)
 
-
-# import os
-# from typing import Optional, Tuple
-
-# import gymnasium
-# import numpy as np
-# import torch
-# from tianshou.data import Collector, VectorReplayBuffer
-# from tianshou.env import DummyVectorEnv
-# from tianshou.env.pettingzoo_env import PettingZooEnv
-# from tianshou.policy import BasePolicy, DQNPolicy, MultiAgentPolicyManager, RandomPolicy
-# from tianshou.trainer import offpolicy_trainer
-# from tianshou.utils.net.common import Net
-
-# from pettingzoo.classic import tictactoe_v3
-
-
-# def _get_agents(
-#     agent_learn: Optional[BasePolicy] = None,
-#     agent_opponent: Optional[BasePolicy] = None,
-#     optim: Optional[torch.optim.Optimizer] = None,
-# ) -> Tuple[BasePolicy, torch.optim.Optimizer, list]:
-#     env = _get_env()
-#     observation_space = (
-#         env.observation_space["observation"]
-#         if isinstance(env.observation_space, gymnasium.spaces.Dict)
-#         else env.observation_space
-#     )
-#     if agent_learn is None:
-#         # model
-#         net = Net(
-#             state_shape=observation_space.shape or observation_space.n,
-#             action_shape=env.action_space.shape or env.action_space.n,
-#             hidden_sizes=[128, 128, 128, 128],
-#             device="cuda" if torch.cuda.is_available() else "cpu",
-#         ).to("cuda" if torch.cuda.is_available() else "cpu")
-#         if optim is None:
-#             optim = torch.optim.Adam(net.parameters(), lr=1e-4)
-#         agent_learn = DQNPolicy(
-#             model=net,
-#             optim=optim,
-#             discount_factor=0.9,
-#             estimation_step=3,
-#             target_update_freq=320,
-#         )
-
-#     if agent_opponent is None:
-#         agent_opponent = RandomPolicy()
-
-#     agents = [agent_opponent, agent_learn]
-#     policy = MultiAgentPolicyManager(agents, env)
-#     return policy, optim, env.agents
-
-
-# def _get_env():
-#     """This function is needed to provide callables for DummyVectorEnv."""
-#     return PettingZooEnv(tictactoe_v3.env())
-
-
-# if __name__ == "__main__":
-#     # ======== Step 1: Environment setup =========
-#     train_envs = DummyVectorEnv([_get_env for _ in range(10)])
-#     test_envs = DummyVectorEnv([_get_env for _ in range(10)])
-
-#     # seed
-#     seed = 1
-#     np.random.seed(seed)
-#     torch.manual_seed(seed)
-#     train_envs.seed(seed)
-#     test_envs.seed(seed)
-
-#     # ======== Step 2: Agent setup =========
-#     policy, optim, agents = _get_agents()
 
 #     # ======== Step 3: Collector setup =========
-#     train_collector = Collector(
-#         policy,
-#         train_envs,
-#         VectorReplayBuffer(20_000, len(train_envs)),
-#         exploration_noise=True,
-#     )
-#     test_collector = Collector(policy, test_envs, exploration_noise=True)
-#     # policy.set_eps(1)
-#     train_collector.collect(n_step=64 * 10)  # batch size * training_num
+    train_collector = Collector(
+        policy,
+        train_envs,
+        VectorReplayBuffer(20_000, len(train_envs)),
+        exploration_noise=True,
+    )
+    test_collector = Collector(policy, test_envs, exploration_noise=True)
+    # policy.set_eps(1)
+    train_collector.collect(n_step=64 * 10)  # batch size * training_num
 
-#     # ======== Step 4: Callback functions setup =========
-#     def save_best_fn(policy):
-#         model_save_path = os.path.join("log", "ttt", "dqn", "policy.pth")
-#         os.makedirs(os.path.join("log", "ttt", "dqn"), exist_ok=True)
-#         torch.save(policy.policies[agents[1]].state_dict(), model_save_path)
+    # ======== Step 4: Callback functions setup =========
+    def save_best_fn(policy):
+        model_save_path = os.path.join("log", "ttt", "dqn", "policy.pth")
+        os.makedirs(os.path.join("log", "ttt", "dqn"), exist_ok=True)
+        torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
 
-#     def stop_fn(mean_rewards):
-#         return mean_rewards >= 0.6
+    def stop_fn(mean_rewards):
+        return mean_rewards >= 1000
 
-#     def train_fn(epoch, env_step):
-#         policy.policies[agents[1]].set_eps(0.1)
+    def train_fn(epoch, env_step):
+        policy.policies[agents[0]].set_eps(0.1)
 
-#     def test_fn(epoch, env_step):
-#         policy.policies[agents[1]].set_eps(0.05)
+    def test_fn(epoch, env_step):
+        policy.policies[agents[0]].set_eps(0.05)
 
-#     def reward_metric(rews):
-#         return rews[:, 1]
+    def reward_metric(rews):   
+        return rews[:, 0]
 
-#     # ======== Step 5: Run the trainer =========
-#     result = offpolicy_trainer(
-#         policy=policy,
-#         train_collector=train_collector,
-#         test_collector=test_collector,
-#         max_epoch=50,
-#         step_per_epoch=1000,
-#         step_per_collect=50,
-#         episode_per_test=10,
-#         batch_size=64,
-#         train_fn=train_fn,
-#         test_fn=test_fn,
-#         stop_fn=stop_fn,
-#         save_best_fn=save_best_fn,
-#         update_per_step=0.1,
-#         test_in_train=False,
-#         reward_metric=reward_metric,
-#     )
+    # ======== Step 5: Run the trainer =========
+    result = offpolicy_trainer(
+        policy=policy,
+        train_collector=train_collector,
+        test_collector=test_collector,
+        max_epoch=30,
+        step_per_epoch=1000,
+        step_per_collect=50,
+        episode_per_test=10,
+        batch_size=64,
+        train_fn=train_fn,
+        test_fn=test_fn,
+        stop_fn=stop_fn,
+        save_best_fn=save_best_fn,
+        update_per_step=0.1,
+        test_in_train=False,
+        reward_metric=reward_metric,
+    )
 
-#     # return result, policy.policies[agents[1]]
-#     print(f"\n==========Result==========\n{result}")
-#     print("\n(the trained policy can be accessed via policy.policies[agents[1]])")
+    # return result, policy.policies[agents[1]]
+    print(f"\n==========Result==========\n{result}")
+    print("\n(the trained policy can be accessed via policy.policies[agents[1]])")
 
 
 """This is a full example of using Tianshou with MARL to train agents, complete with argument parsing (CLI) and logging.
