@@ -112,7 +112,7 @@ class CNN(nn.Module):
 
 if __name__ == "__main__":
     # setup env
-    env_name = "harvest"
+    env_name = 'harvest'
     env_args = dict(
         env=env_name,
         num_agents=1,
@@ -196,24 +196,24 @@ if __name__ == "__main__":
 
     # ======== Step 4: Callback functions setup =========
     def save_best_fn(policy):
-        model_save_path = os.path.join("log", "harvest", "dqn", "policy.pth")
-        os.makedirs(os.path.join("log", "harvest", "dqn"), exist_ok=True)
+        model_save_path = os.path.join("log", env_name, "ppo", "policy.pth")
+        os.makedirs(os.path.join("log", env_name, "ppo"), exist_ok=True)
         torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
 
     def stop_fn(mean_rewards):
-        return mean_rewards >= 0.8
+        return mean_rewards >= 1
 
-    def train_fn(epoch, env_step):
-        policy.policies[agents[0]].set_eps(0.1)
+    # def train_fn(epoch, env_step):
+    #     policy.policies[agents[0]].set_eps(0.1)
 
-    def test_fn(epoch, env_step):
-        policy.policies[agents[0]].set_eps(0.05)
+    # def test_fn(epoch, env_step):
+    #     policy.policies[agents[0]].set_eps(0.05)
 
     def reward_metric(rews):   
         return rews[:, 0]
 
     # log
-    log_path = os.path.join(args.logdir, 'Harvest', 'ppo')
+    log_path = os.path.join(args.logdir, env_name, 'ppo')
     writer = SummaryWriter(log_path)
     logger = TensorboardLogger(writer)
 
@@ -227,9 +227,9 @@ if __name__ == "__main__":
         args.repeat_per_collect,
         args.test_num,
         args.batch_size,
+        save_best_fn=save_best_fn,
         step_per_collect=args.step_per_collect,
         stop_fn=stop_fn,
-        save_best_fn=save_best_fn,
         logger=logger
     )
 
@@ -239,4 +239,5 @@ if __name__ == "__main__":
     eval_result = test_collector.collect(n_episode=1)            
     print(f"\n==========DQN test Result==========\n{eval_result}")
     print("\n(the trained policy can be accessed via policy.policies[agents[0]])")
+    save_best_fn(policy)
     breakpoint()
