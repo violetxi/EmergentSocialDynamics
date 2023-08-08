@@ -4,7 +4,6 @@
 # numpy-stl
 # torch
 # torchvision
-# wandb
 # pettingzoo[all]
 # #torchrl
 # pytest
@@ -17,3 +16,4 @@ opencv-python
 pettingzoo[all]==1.23.0
 packaging==21.3
 tianshou==0.5.0
+wandb==0.15.8

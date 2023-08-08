@@ -3,7 +3,8 @@ from typing import Any, Dict
 
 import numpy as np
 
-import gym
+#import gym
+import gymnasium as gym
 from pettingzoo import ParallelEnv
 
 from envs.env_creator import get_env_creator
@@ -16,7 +17,7 @@ class parallel_env(ParallelEnv):
     def __init__(
             self, 
             env_kwargs: Dict[str, Any],
-            max_cycles: int =1000,            
+            max_cycles: int =5000,            
             render_mode: str =None,            
             ) -> None:
         """
@@ -53,7 +54,12 @@ class parallel_env(ParallelEnv):
     # If your spaces change over time, remove this line (disable caching).
     @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
-        return self._env.action_space
+        # @TODO: gymnaisum is assumed for PPO actor class in TianShou, so we need to 
+        # change action_space to gymnasium's action space only for this purpose
+        # maybe consider redoing the environment in gymnasium if it's worthwile
+        # but currently this hack works...
+        n_actions = self._env.action_space.n
+        return gym.spaces.Discrete(n_actions)        
 
     def render(self):
         """
