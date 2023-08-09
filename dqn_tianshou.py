@@ -110,7 +110,9 @@ if __name__ == "__main__":
     env = DummyVectorEnv([lambda: env])
 
     # Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
-    collector = Collector(policies, env)
+    #collector = Collector(policies, env)
+    collector = Collector(policy, env, exploration_noise=True)
+
 
     # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
     result = collector.collect(n_episode=2)
@@ -136,7 +138,7 @@ if __name__ == "__main__":
         torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
 
     def stop_fn(mean_rewards):
-        return mean_rewards >= 1
+        return mean_rewards >= 3000
 
     def train_fn(epoch, env_step):
         policy.policies[agents[0]].set_eps(0.1)
@@ -144,7 +146,7 @@ if __name__ == "__main__":
     def test_fn(epoch, env_step):
         policy.policies[agents[0]].set_eps(0.05)
 
-    def reward_metric(rews):   
+    def reward_metric(rews):
         return rews[:, 0]
 
     # ======== Step 5: Run the trainer =========

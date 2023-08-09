@@ -78,9 +78,11 @@ class parallel_env(ParallelEnv):
         Reset needs to initialize the `agents` attribute and must set up the
         environment so that render(), and step() can be called without issues.
         Here it initializes the `num_moves` variable which counts the number of
-        hands that are played.
+        hands that are played. It also resets the `steps` variable which counts
+        the number of steps in the current episode.
         Returns the observations for each agent
         """
+        self.steps = 0
         self.agents = self.possible_agents[:]        
         obs = self._env.reset()
         observations = {}
@@ -106,7 +108,7 @@ class parallel_env(ParallelEnv):
         self.steps += 1
         actions
         obs, rewards, terminations, infos  = self._env.step(actions)
-        if self.steps > self.max_cycles:
+        if self.steps == self.max_cycles:
             terminations = {agent: True for agent in self.agents}
         observations = {}
         for agent_id, ob in obs.items():

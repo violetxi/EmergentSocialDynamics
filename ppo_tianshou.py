@@ -42,14 +42,14 @@ def get_args():
     parser.add_argument('--buffer-size', type=int, default=20000)
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--step-per-epoch', type=int, default=50000)
+    parser.add_argument('--epoch', type=int, default=1000)
+    parser.add_argument('--step-per-epoch', type=int, default=5000)
     parser.add_argument('--step-per-collect', type=int, default=2000)
     parser.add_argument('--repeat-per-collect', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[64, 64])
     parser.add_argument('--training-num', type=int, default=20)
-    parser.add_argument('--test-num', type=int, default=100)
+    parser.add_argument('--test-num', type=int, default=3)
     parser.add_argument('--logdir', type=str, default='log')
     parser.add_argument('--render', type=float, default=0.)
     parser.add_argument(
@@ -70,7 +70,7 @@ def get_args():
     return args
 
 
-def get_env(env_name, env_kwargs):
+def get_env(env_kwargs):
     # Step 1: Load ssd environment
     env = parallel_env(env_kwargs, render_mode="rgb_array")
     env = parallel_to_aec(env)
@@ -120,7 +120,7 @@ if __name__ == "__main__":
         alpha=0.0,
         beta=0.0
     )    
-    env = get_env(env_name, env_args)
+    env = get_env(env_args)
     train_envs = DummyVectorEnv([lambda : env])
     test_envs = DummyVectorEnv([lambda : env])
     # seed
@@ -169,19 +169,6 @@ if __name__ == "__main__":
     policy = MultiAgentPolicyManager(all_agents, env)
     agents = env.agents
 
-    # Step 3: Define policies for each agent    
-    # policies = MultiAgentPolicyManager([RandomPolicy()], env)
-
-    # # Step 4: Convert the env to vector format
-    # env = DummyVectorEnv([lambda: env])
-
-    # # Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
-    # collector = Collector(policies, env)
-
-    # # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
-    # result = collector.collect(n_episode=2)
-    # print(f"\n==========Random Result==========\n{result}")
-
 #    # ======== Step 3: Collector setup =========
     train_collector = Collector(
         policy,
@@ -194,7 +181,7 @@ if __name__ == "__main__":
         test_envs, 
         exploration_noise=True)
     
-    train_collector.collect(n_step=64 * 10)  # batch size * training_num
+    result = train_collector.collect(n_episode=1)
 
     # ======== Step 4: Callback functions setup =========
     def save_best_fn(policy):
@@ -206,7 +193,7 @@ if __name__ == "__main__":
         torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
 
     def stop_fn(mean_rewards):
-        return mean_rewards >= 1
+        return mean_rewards >= 3000
 
     def reward_metric(rews):   
         return rews[:, 0]
@@ -239,3 +226,17 @@ if __name__ == "__main__":
     print(f"\n==========DQN test Result==========\n{eval_result}")
     print("\n(the trained policy can be accessed via policy.policies[agents[0]])")
     save_best_fn(policy)
+
+
+    # Step 3: Define policies for each agent    
+    # policies = MultiAgentPolicyManager([RandomPolicy()], env)
+
+    # # Step 4: Convert the env to vector format
+    # env = DummyVectorEnv([lambda: env])
+
+    # # Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
+    # collector = Collector(policies, env)
+
+    # # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
+    # result = collector.collect(n_episode=2)
+    # print(f"\n==========Random Result==========\n{result}")

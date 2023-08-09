@@ -34,7 +34,7 @@ from pettingzoo_env import parallel_env
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ckpt_path', required=True, type=str, help='path to the checkpoint file')
+    parser.add_argument('--ckpt-path', required=True, type=str, help='path to the checkpoint file')
     parser.add_argument('--seed', type=int, default=1626)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[64, 64])
@@ -184,7 +184,7 @@ if __name__ == "__main__":
 
     # ======== Step 5: Test the trained policy ========
     num_episodes = 5
-    test_steps = 1_000
+    test_steps = 1000
     # video save path
     video_dir = os.path.join(os.path.dirname(args.ckpt_path), 'videos')
     os.makedirs(video_dir, exist_ok=True)
@@ -199,7 +199,6 @@ if __name__ == "__main__":
             agent_out = agent_policy(batch_obs)
             action = agent_out.act.item()
             obs, reward, done, truncation, info = env.step(action)
-            print(action)
             frames.append(env.render())
             batch_obs = Batch(dict(obs=obs, info=info))
             rewards.append(reward)
