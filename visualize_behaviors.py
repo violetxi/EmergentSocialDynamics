@@ -8,6 +8,7 @@ Requirements:
 pettingzoo == 1.22.0
 git+https://github.com/thu-ml/tianshou
 """
+import os
 import argparse
 import  numpy as np
 import cv2 
@@ -33,25 +34,12 @@ from pettingzoo_env import parallel_env
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task', type=str, default='CartPole-v0')
-    parser.add_argument('--reward-threshold', type=float, default=None)
+    parser.add_argument('--ckpt_path', required=True, type=str, help='path to the checkpoint file')
     parser.add_argument('--seed', type=int, default=1626)
-    parser.add_argument('--buffer-size', type=int, default=20000)
-    parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--epoch', type=int, default=10)
-    parser.add_argument('--step-per-epoch', type=int, default=50000)
-    parser.add_argument('--step-per-collect', type=int, default=2000)
-    parser.add_argument('--repeat-per-collect', type=int, default=10)
-    parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[64, 64])
-    parser.add_argument('--training-num', type=int, default=20)
-    parser.add_argument('--test-num', type=int, default=100)
     parser.add_argument('--logdir', type=str, default='log')
-    parser.add_argument('--render', type=float, default=0.)
-    parser.add_argument(
-        '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
-    )
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     # ppo special
     parser.add_argument('--vf-coef', type=float, default=0.5)
     parser.add_argument('--ent-coef', type=float, default=0.0)
@@ -67,7 +55,7 @@ def get_args():
     return args
 
 
-def get_env(env_name, env_kwargs):
+def get_env(env_kwargs):
     # Step 1: Load ssd environment
     env = parallel_env(env_kwargs, render_mode="rgb_array")
     env = parallel_to_aec(env)
@@ -130,7 +118,7 @@ if __name__ == "__main__":
         alpha=0.0,
         beta=0.0
     )    
-    env = get_env(env_name, env_args)
+    env = get_env(env_args)
     # seed
     seed = 0    
     torch.manual_seed(seed)
@@ -189,14 +177,19 @@ if __name__ == "__main__":
 
     # ======== Step 4: Load trained policy and set to eval mode =========
     agent_policy = policy.policies['agent-0']
-    agent_policy.load_state_dict(torch.load('log/harvest/ppo/policy.pth'))
+    #agent_policy.load_state_dict(torch.load('log/harvest/ppo/policy.pth'))
+    agent_policy.load_state_dict(torch.load(args.ckpt_path))
     agent_policy.eval()
-
 
 
     # ======== Step 5: Test the trained policy ========
     num_episodes = 5
-    test_steps = 1_000    
+    test_steps = 1_000
+    # video save path
+    video_dir = os.path.join(os.path.dirname(args.ckpt_path), 'videos')
+    os.makedirs(video_dir, exist_ok=True)
+    model_str = args.ckpt_path.split('/')[-3]
+    params_str = args.ckpt_path.split('/')[-2]
     for n in range(num_episodes):
         frames = []
         rewards = []
@@ -206,10 +199,12 @@ if __name__ == "__main__":
             agent_out = agent_policy(batch_obs)
             action = agent_out.act.item()
             obs, reward, done, truncation, info = env.step(action)
+            print(action)
             frames.append(env.render())
             batch_obs = Batch(dict(obs=obs, info=info))
             rewards.append(reward)
-        save_video(frames, f'ppo_{n}.mp4')
+        video_path = os.path.join(video_dir, f'{model_str}_{params_str}_{n}.mp4')  
+        save_video(frames, video_path)
 
         print(f"Episode {i+1}:")
         print(f"Average reward: {np.mean(rewards)}")
