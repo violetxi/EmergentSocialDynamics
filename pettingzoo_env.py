@@ -104,6 +104,7 @@ class parallel_env(ParallelEnv):
         dicts where each dict looks like {agent_1: item_1, agent_2: item_2}
         """
         self.steps += 1
+        actions
         obs, rewards, terminations, infos  = self._env.step(actions)
         if self.steps > self.max_cycles:
             terminations = {agent: True for agent in self.agents}

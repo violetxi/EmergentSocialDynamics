@@ -8,12 +8,12 @@ Requirements:
 pettingzoo == 1.22.0
 git+https://github.com/thu-ml/tianshou
 """
-import os
 import argparse
+import  numpy as np
+import cv2 
 
 import torch
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import (    
     Compose, 
     ToPILImage,
@@ -21,14 +21,11 @@ from torchvision.transforms import (
     ToTensor    
 )
 
-from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv
+from tianshou.data import Batch
 from tianshou.policy import PPOPolicy, MultiAgentPolicyManager
-from tianshou.trainer import onpolicy_trainer
-from tianshou.utils import TensorboardLogger
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
-from tianshou.env import DummyVectorEnv, PettingZooEnv
+from tianshou.env import PettingZooEnv
 from pettingzoo.utils.conversions import parallel_to_aec
 
 from pettingzoo_env import parallel_env
@@ -42,7 +39,7 @@ def get_args():
     parser.add_argument('--buffer-size', type=int, default=20000)
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--step-per-epoch', type=int, default=50000)
     parser.add_argument('--step-per-collect', type=int, default=2000)
     parser.add_argument('--repeat-per-collect', type=int, default=10)
@@ -100,13 +97,26 @@ class CNN(nn.Module):
             ToTensor(),                         
         ])
 
-    def forward(self, obs, state=None, info={}):        
-        transformed_obs = torch.stack(
-            [self.preprocessing(ob) for ob in obs.obs.curr_obs])        
+    def forward(self, obs, state=None, info={}):
+        if len(obs.obs.curr_obs.shape) == 3:            
+            transformed_obs = self.preprocessing(obs.obs.curr_obs)
+            transformed_obs = transformed_obs.unsqueeze(0)
+        else:
+            transformed_obs = torch.stack(
+                [self.preprocessing(ob) for ob in obs.obs.curr_obs])
         embds = self.encoder(transformed_obs.to("cuda"))
         logits = embds
         return logits, state
 
+
+def save_video(frames, filename):
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    w, h, c = frames[0].shape
+    out = cv2.VideoWriter(filename, fourcc, 30.0, (w * 10, h * 10))
+    for frame in frames:
+        frame = cv2.resize(frame.astype(np.uint8), (w * 10, h * 10), interpolation=cv2.INTER_AREA)
+        # We write every frame to the output video file. We first ensure the frame is in the correct format
+        out.write(frame)    
 
 
 if __name__ == "__main__":
@@ -121,14 +131,9 @@ if __name__ == "__main__":
         beta=0.0
     )    
     env = get_env(env_name, env_args)
-    train_envs = DummyVectorEnv([lambda : env])
-    test_envs = DummyVectorEnv([lambda : env])
     # seed
-    seed = 0
-    # np.random.seed(seed)
-    # torch.manual_seed(seed)
-    # train_envs.seed(seed)
-    test_envs.seed(seed)
+    seed = 0    
+    torch.manual_seed(seed)
     # model
     net = CNN(64)
     action_shape = 8
@@ -167,8 +172,7 @@ if __name__ == "__main__":
     )
     all_agents = [dqn_agent]
     policy = MultiAgentPolicyManager(all_agents, env)
-    agents = env.agents
-
+    agents = env.agents    
     # Step 3: Define policies for each agent    
     # policies = MultiAgentPolicyManager([RandomPolicy()], env)
 
@@ -182,60 +186,32 @@ if __name__ == "__main__":
     # result = collector.collect(n_episode=2)
     # print(f"\n==========Random Result==========\n{result}")
 
-#    # ======== Step 3: Collector setup =========
-    train_collector = Collector(
-        policy,
-        train_envs,
-        VectorReplayBuffer(20_000, len(train_envs)),
-        exploration_noise=True,
-    )
-    test_collector = Collector(
-        policy, 
-        test_envs, 
-        exploration_noise=True)
-    
-    train_collector.collect(n_step=64 * 10)  # batch size * training_num
 
-    # ======== Step 4: Callback functions setup =========
-    def save_best_fn(policy):
-        model_save_folder =os.path.join(
-            "log", env_name, 'ppo', f'ent_coef-{args.ent_coef}'
-            )
-        model_save_path = os.path.join(model_save_folder, "best_policy.pth")
-        os.makedirs(model_save_folder, exist_ok=True)           
-        torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
+    # ======== Step 4: Load trained policy and set to eval mode =========
+    agent_policy = policy.policies['agent-0']
+    agent_policy.load_state_dict(torch.load('log/harvest/ppo/policy.pth'))
+    agent_policy.eval()
 
-    def stop_fn(mean_rewards):
-        return mean_rewards >= 1
 
-    def reward_metric(rews):   
-        return rews[:, 0]
 
-    # log
-    log_path = os.path.join("log", env_name, 'ppo', f'ent_coef-{args.ent_coef}')
-    writer = SummaryWriter(log_path)
-    logger = TensorboardLogger(writer)
+    # ======== Step 5: Test the trained policy ========
+    num_episodes = 5
+    test_steps = 1_000    
+    for n in range(num_episodes):
+        frames = []
+        rewards = []
+        obs, info = env.reset(seed=n)
+        batch_obs = Batch(dict(obs=obs, info=info))        
+        for i in range(test_steps):        
+            agent_out = agent_policy(batch_obs)
+            action = agent_out.act.item()
+            obs, reward, done, truncation, info = env.step(action)
+            frames.append(env.render())
+            batch_obs = Batch(dict(obs=obs, info=info))
+            rewards.append(reward)
+        save_video(frames, f'ppo_{n}.mp4')
 
-    # ======== Step 5: Run the trainer =========
-    result = onpolicy_trainer(
-        policy,
-        train_collector,
-        test_collector,
-        args.epoch,
-        args.step_per_epoch,
-        args.repeat_per_collect,
-        args.test_num,
-        args.batch_size,
-        save_best_fn=save_best_fn,
-        step_per_collect=args.step_per_collect,
-        stop_fn=stop_fn,
-        logger=logger
-    )
-
-    # ======== Step 6: Test the trained policy ========
-    policy.eval()
-    eval_collector = Collector(policy, test_envs)
-    eval_result = test_collector.collect(n_episode=1)            
-    print(f"\n==========DQN test Result==========\n{eval_result}")
-    print("\n(the trained policy can be accessed via policy.policies[agents[0]])")
-    save_best_fn(policy)
+        print(f"Episode {i+1}:")
+        print(f"Average reward: {np.mean(rewards)}")
+        print(f"Std of reward: {np.std(rewards)}")  
+        print(f"Max reward: {np.max(rewards)}")     
