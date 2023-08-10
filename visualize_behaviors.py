@@ -186,28 +186,7 @@ if __name__ == "__main__":
     print(f"Reward for {len(frames)} episodes for {len(agents)} agents")
     print(f"Mean total reward across episode: {eval_result['rews']}")
     print(f"std: {eval_result['rews_std']}")
-
     
-
-    # for n in range(num_episodes):
-    #     frames = []
-    #     rewards = []
-    #     obs, info = env.reset(seed=n)
-    #     batch_obs = Batch(dict(obs=obs, info=info))        
-    #     for i in range(test_steps):        
-    #         agent_out = agent_policy(batch_obs)
-    #         action = agent_out.act.item()
-    #         obs, reward, done, truncation, info = env.step(action)
-    #         frames.append(env.render())
-    #         batch_obs = Batch(dict(obs=obs, info=info))
-    #         rewards.append(reward)
-    #     video_path = os.path.join(video_dir, f'{model_str}_{params_str}_{n}.mp4')  
-    #     save_video(frames, video_path)
-
-    #     print(f"Episode {i+1}:")
-    #     print(f"Average reward: {np.mean(rewards)}")
-    #     print(f"Std of reward: {np.std(rewards)}")  
-    #     print(f"Max reward: {np.max(rewards)}")     
 
 # Step 3: Define policies for each agent    
     # policies = MultiAgentPolicyManager([RandomPolicy()], env)

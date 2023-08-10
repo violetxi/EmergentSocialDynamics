@@ -1,523 +1,242 @@
-"""
-Trainer class and training loop are here
+"""This is a minimal example to show how to use Tianshou with a PettingZoo environment. No training of agents is done here.
+
+Author: Will (https://github.com/WillDudley)
+
+Python version used: 3.8.10
+
+Requirements:
+pettingzoo == 1.22.0
+git+https://github.com/thu-ml/tianshou
 """
 import os
-# set to false to suppress warnings about acotr and qvalue networks needs to be 
-# updated manually as we do that in the training loop
-os.environ['RL_WARNINGS']='False'
-import wandb
 import argparse
-import datetime
-import numpy as np
-from defaults import DEFAULT_ARGS
-from typeguard import typechecked
-from typing import List, Optional
-from copy import deepcopy
-from tqdm import tqdm
 
 import torch
-from tensordict import TensorDict
-from torchrl.modules.tensordict_module.common import SafeModule
-
-from social_rl.agents.base_agent import BaseAgent
-from social_rl.utils.reward_standardizer import RewardStandardizer
-from social_rl.utils.utils import (
-    load_config_from_path,
-    ensure_dir,
+from torch import nn
+from torch.utils.tensorboard import SummaryWriter
+from torchvision.transforms import (    
+    Compose, 
+    ToPILImage,
+    Grayscale, 
+    ToTensor    
 )
-torch.autograd.set_detect_anomaly(True)
+
+from tianshou.data import Collector, VectorReplayBuffer
+from tianshou.env import DummyVectorEnv
+from tianshou.policy import PPOPolicy, MultiAgentPolicyManager
+from tianshou.trainer import onpolicy_trainer
+from tianshou.utils import TensorboardLogger
+from tianshou.utils.net.common import ActorCritic
+from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.env import DummyVectorEnv, PettingZooEnv
+from pettingzoo.utils.conversions import parallel_to_aec
+
+from pettingzoo_env import parallel_env
 
 
-
-@typechecked
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='Train a MARL model')
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task', type=str, default='CartPole-v0')
+    parser.add_argument('--reward-threshold', type=float, default=None)
+    parser.add_argument('--seed', type=int, default=1626)
+    parser.add_argument('--buffer-size', type=int, default=20000)
+    parser.add_argument('--lr', type=float, default=3e-4)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--epoch', type=int, default=1000)
+    parser.add_argument('--step-per-epoch', type=int, default=5000)
+    parser.add_argument('--step-per-collect', type=int, default=2000)
+    parser.add_argument('--repeat-per-collect', type=int, default=10)
+    parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[64, 64])
+    parser.add_argument('--training-num', type=int, default=20)
+    parser.add_argument('--test-num', type=int, default=3)
+    parser.add_argument('--logdir', type=str, default='log')
+    parser.add_argument('--render', type=float, default=0.)
     parser.add_argument(
-        '--config_path', type=str,
-        required=True,
-        help='Path to config file'
+        '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
     )
-    parser.add_argument(
-        '--seed', type=int, 
-        default=DEFAULT_ARGS['seed'],
-        help='Random seed'
-    )
-    parser.add_argument(
-        '--log_dir', type=str, 
-        default=DEFAULT_ARGS['log_dir'],
-        help='Directory to save logs'
-    )
-    parser.add_argument(
-        '--batch_size', type=int, 
-        default=DEFAULT_ARGS['batch_size'],
-        help='Batch size'
-    )
-    parser.add_argument(
-        '--num_episodes', type=int, 
-        default=DEFAULT_ARGS['num_episodes'],
-        help='Total number of episodes to train on'
-    )
-    parser.add_argument(
-        '--max_episode_len', type=int,
-        default=DEFAULT_ARGS['max_episode_len'],
-        help='Max number of steps per episode'
-    )
-    parser.add_argument(
-        '--warm_up_steps', type=int,
-        default=DEFAULT_ARGS['warm_up_steps'],
-        help='Number of steps to warm up the replay buffer'
-    )
-    parser.add_argument(
-        '--num_agents', type=int,
-        default=DEFAULT_ARGS['num_agents'],
-        help='Number of agents in the environment'
-    )
-    parser.add_argument(
-        '--project_name', type=str,
-        default=DEFAULT_ARGS['project_name'],
-        help='Name of the project for wandb'
-    )
-    args = parser.parse_args()
+    # ppo special
+    parser.add_argument('--vf-coef', type=float, default=0.5)
+    parser.add_argument('--ent-coef', type=float, default=0.0)
+    parser.add_argument('--eps-clip', type=float, default=0.2)
+    parser.add_argument('--max-grad-norm', type=float, default=0.5)
+    parser.add_argument('--gae-lambda', type=float, default=0.95)
+    parser.add_argument('--rew-norm', type=int, default=0)
+    parser.add_argument('--norm-adv', type=int, default=0)
+    parser.add_argument('--recompute-adv', type=int, default=0)
+    parser.add_argument('--dual-clip', type=float, default=None)
+    parser.add_argument('--value-clip', type=int, default=0)
+    args = parser.parse_known_args()[0]
     return args
 
 
-
-@typechecked
-class Trainer:
-    """Trainer class contains a reward standardizer to regularize rewards such 
-    that it has mean=0, std=1.
-    Args:
-        args (argparse.Namespace): arguments
-    """
-    def __init__(
-        self, 
-        args: argparse.Namespace
-    ) -> None:
-        self.reward_standardizer = RewardStandardizer()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.args = args        
-        self._init_log_dir()
-        self.config = load_config_from_path(args.config_path, args)        
-        self._set_centralization()
-        self._init_env(args.seed)
-        self._init_agents()
-        self._init_buffer()
-        self._init_wandb()        
+def get_env(env_kwargs):
+    # Step 1: Load ssd environment
+    env = parallel_env(env_kwargs, render_mode="rgb_array")
+    env = parallel_to_aec(env)
+    # Step 2: Wrap the environment for Tianshou interfacing
+    env = PettingZooEnv(env)
+    return env
 
 
-    def _set_centralization(self) -> None:
-        if self.config.agent_config.agent_class.__name__ \
-            in DEFAULT_ARGS["centralized_agent_list"]:
-            self.decentralized = False
-            self.centralized_data = {}
-        else:
-            self.decentralized = True
+class CNN(nn.Module):
+    def __init__(self, output_dim):
+        super(CNN, self).__init__()
+        self.output_dim = output_dim    # actor wrapper expects this attribute
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 6, 3, stride=1),
+            nn.ReLU(),            
+            nn.Flatten(),
+            nn.Linear(1014, 64),
+            nn.ReLU(),
+            nn.Linear(64, output_dim),
+            nn.ReLU(),
+        )
+        self.dist_mean = nn.Linear(output_dim, output_dim)
+        self.dist_std = nn.Linear(output_dim, output_dim)
+        self.preprocessing = self.tranforms = Compose([
+            ToPILImage(),
+            Grayscale(),
+            ToTensor(),                         
+        ])
+
+    def forward(self, obs, state=None, info={}):        
+        transformed_obs = torch.stack(
+            [self.preprocessing(ob) for ob in obs.obs.curr_obs])        
+        embds = self.encoder(transformed_obs.to("cuda"))
+        logits = embds
+        return logits, state
 
 
-    def _init_save_postfix(self) -> str:
-        postfix = ""
-        for arg, default_value in DEFAULT_ARGS.items():                      
-            if arg != "centralized_agent_list" and arg != "eval_ep_len":
-                current_value = getattr(args, arg)
-                if current_value != default_value:
-                    postfix += f'-{arg}_{current_value}'
-        return postfix
+
+if __name__ == "__main__":
+    # setup env
+    env_name = 'harvest'
+    env_args = dict(
+        env=env_name,
+        num_agents=1,
+        use_collective_reward=False,
+        inequity_averse_reward=False,
+        alpha=0.0,
+        beta=0.0
+    )    
+    env = get_env(env_args)
+    train_envs = DummyVectorEnv([lambda : env])
+    test_envs = DummyVectorEnv([lambda : env])
+    # seed
+    seed = 0
+    # np.random.seed(seed)
+    # torch.manual_seed(seed)
+    # train_envs.seed(seed)
+    test_envs.seed(seed)
+    # model
+    net = CNN(64)
+    action_shape = 8
+    device = "cuda"
+    actor = Actor(net, action_shape, device=device).to(device)
+    critic = Critic(net, device=device).to(device)
+    actor_critic = ActorCritic(actor, critic)
+    # orthogonal initialization
+    for m in actor_critic.modules():
+        if isinstance(m, torch.nn.Linear):
+            torch.nn.init.orthogonal_(m.weight)
+            torch.nn.init.zeros_(m.bias)
+
+    optim = torch.optim.Adam(actor_critic.parameters(), lr=1e-4)
+    dist = torch.distributions.Categorical
+    # args
+    args=get_args()
+    dqn_agent = PPOPolicy(
+        actor,
+        critic,
+        optim,
+        dist,
+        discount_factor=args.gamma,
+        max_grad_norm=args.max_grad_norm,
+        eps_clip=args.eps_clip,
+        vf_coef=args.vf_coef,
+        ent_coef=args.ent_coef,
+        gae_lambda=args.gae_lambda,
+        reward_normalization=args.rew_norm,
+        dual_clip=args.dual_clip,
+        value_clip=args.value_clip,
+        action_space=env.action_space,
+        deterministic_eval=True,
+        advantage_normalization=args.norm_adv,
+        recompute_advantage=args.recompute_adv
+    )
+    all_agents = [dqn_agent]
+    policy = MultiAgentPolicyManager(all_agents, env)
+    agents = env.agents
+
+#    # ======== Step 3: Collector setup =========
+    train_collector = Collector(
+        policy,
+        train_envs,
+        VectorReplayBuffer(20_000, len(train_envs)),
+        exploration_noise=True,
+    )
+    test_collector = Collector(
+        policy, 
+        test_envs, 
+        exploration_noise=True)
     
+    result = train_collector.collect(n_episode=1)
 
-    def _init_log_dir(self) -> None:
-        """Initialize log directory to save buffer, checkpoints, and logs
-        By default, log_dir is ./logs/ and the name of the log directory is
-        the name of the config file without the extension
-        """
-        self.postfix = self._init_save_postfix()      
-        self.args.log_dir = os.path.join(
-            self.args.log_dir,       
-            os.path.basename(self.args.config_path).split('.')[0]
-            )        
-        self.args.log_dir += self.postfix
-        ensure_dir(self.args.log_dir)
-        
-        self.checkpoint_dir = os.path.join(
-            self.args.log_dir,            
-            'checkpoints'
+    # ======== Step 4: Callback functions setup =========
+    def save_best_fn(policy):
+        model_save_folder =os.path.join(
+            "log", env_name, 'ppo', f'ent_coef-{args.ent_coef}'
             )
-        ensure_dir(self.checkpoint_dir)
-        
+        model_save_path = os.path.join(model_save_folder, "best_policy.pth")
+        os.makedirs(model_save_folder, exist_ok=True)           
+        torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
 
-    def _init_wandb(self) -> None:
-        cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        run_name = f"{os.path.basename(self.args.config_path).split('.')[0]}"
-        run_name += self.postfix   
-        run_name += f":{cur_time}"
-        wandb.init(
-            project=self.args.project_name, 
-            config=args.__dict__,
-            name=run_name
-            )
+    def stop_fn(mean_rewards):
+        return mean_rewards >= 3000
 
+    def reward_metric(rews):   
+        return rews[:, 0]
 
-    def _get_test_env_seed(self) -> int:
-        """
-        Initialize test environment seed to ensure no overlap with trianing env
-        """
-        env_config = self.config.env_config
-        low = self.args.seed + self.args.num_episodes + 1
-        high = low + self.args.seed + self.args.max_episode_len
-        return np.random.randint(low, high)
-        
+    # log
+    log_path = os.path.join("log", env_name, 'ppo', f'ent_coef-{args.ent_coef}')
+    writer = SummaryWriter(log_path)
+    logger = TensorboardLogger(writer)
 
-    def _init_env(
-        self, 
-        seed: int
-        ) -> None:
-        env_config = self.config.env_config
-        self.env_name = env_config.env_name
-        env_class = env_config.env_class        
-        # Do not use batch_size for environment
-        kwargs = {
-            "device": self.device,
-        }
-        self.env = env_class(seed, env_config, kwargs)
-        test_env_seed = self._get_test_env_seed()
-        self.test_env = env_class(test_env_seed, env_config, kwargs)
+    # ======== Step 5: Run the trainer =========
+    result = onpolicy_trainer(
+        policy,
+        train_collector,
+        test_collector,
+        args.epoch,
+        args.step_per_epoch,
+        args.repeat_per_collect,
+        args.test_num,
+        args.batch_size,
+        save_best_fn=save_best_fn,
+        step_per_collect=args.step_per_collect,
+        stop_fn=stop_fn,
+        logger=logger
+    )
 
-
-    def _init_agent(
-        self, 
-        agent_idx: int, 
-        agent_id: str
-    ) -> BaseAgent:
-        """Initialize each agent's world model, actor, value and qvalue networks
-        args:
-            agent_idx: index of agent in env
-            agent_id: id of agent in env
-        """ 
-        actor_config = self.config.agent_config.actor_config
-        actor_net_module = actor_config.net_module(actor_config.net_kwargs)
-        module = actor_config.dist_wrapper(actor_net_module)        
-        actor_module = SafeModule(
-            module, 
-            in_keys=actor_config.in_keys, 
-            out_keys=actor_config.intermediate_keys
-        )
-        actor = actor_config.wrapper_class(
-            module=actor_module, 
-            in_keys=actor_config.intermediate_keys,
-            out_keys=actor_config.out_keys,
-            spec=actor_config.action_spec,
-            distribution_class=actor_config.dist_class  
-        )
-        actor = actor.to(self.device)
-
-        qvalue_config = self.config.agent_config.qvalue_config
-        qvalue_module = qvalue_config.net_module(qvalue_config.net_kwargs)
-        # outkeys defaults to state_action_value with obs as inkey
-        qvalue = qvalue_config.wrapper_class(
-            qvalue_module, 
-            in_keys=qvalue_config.in_keys,
-            out_keys=qvalue_config.out_keys
-        )
-        qvalue = qvalue.to(self.device)
-        
-        wm_config = self.config.agent_config.wm_config                
-        wm_module = wm_config.wm_module_cls(agent_idx, wm_config)        
-        world_model = wm_config.wrapper_class(
-            wm_module, 
-            wm_config.in_keys, 
-            wm_config.out_keys
-        )
-        world_model = world_model.to(self.device)
-
-        replay_buffer_config = self.config.agent_config.replay_buffer_config        
-        replay_buffer = replay_buffer_config.buffer_class(**replay_buffer_config.buffer_kwargs)
-
-        if self.config.agent_config.value_config is not None:
-            value_config = self.config.agent_config.value_config
-            value_module = value_config.net_module(value_config.net_kwargs)
-            # outkeys defaults to state_value with obs as inkey     
-            value = value_config.wrapper_class(
-                value_module, 
-                in_keys=value_config.in_keys,
-                out_keys=value_config.out_keys
-            )
-            value = value.to(self.device)
-        else:
-            value = None
-
-        if hasattr(self.config.agent_config, 'intr_reward_weight'):
-            intr_reward_weight = self.config.agent_config.intr_reward_weight
-            agent = self.config.agent_config.agent_class(
-                agent_idx=agent_idx,
-                agent_id=agent_id,
-                config=self.config.agent_config,
-                actor=actor,
-                qvalue=qvalue,
-                world_model=world_model,
-                replay_buffer=replay_buffer,
-                intr_reward_weight=intr_reward_weight,
-                value=value
-            )
-            self._step_intr_reward = {}
-        else:
-            agent = self.config.agent_config.agent_class(
-                agent_idx=agent_idx, 
-                agent_id=agent_id,
-                config=self.config.agent_config,
-                actor=actor,
-                value=value, 
-                qvalue=qvalue, 
-                world_model=world_model, 
-                replay_buffer=replay_buffer        
-            )
-
-        return agent
+    # ======== Step 6: Test the trained policy ========
+    policy.eval()
+    eval_collector = Collector(policy, test_envs)
+    eval_result = test_collector.collect(n_episode=1)            
+    print(f"\n==========DQN test Result==========\n{eval_result}")
+    print("\n(the trained policy can be accessed via policy.policies[agents[0]])")
+    save_best_fn(policy)
 
 
-    def _init_agents(self) -> None:
-        agent_config = self.config.agent_config
-        agent_ids = self.env.get_agent_ids()
-        assert len(agent_ids) == agent_config.num_agents, \
-            f"Number of agents in env ({len(agent_ids)}) does not match number of agents in config ({agent_config.num_agents})"
-        
-        self.agents = {}        
-        for agent_idx in range(agent_config.num_agents):
-            agent_id = agent_ids[agent_idx]            
-            agent = self._init_agent(agent_idx, agent_id)
-            self.agents[agent_id] = agent        
-        print(f"Finished initializing {agent_config.num_agents} agents")
+    # Step 3: Define policies for each agent    
+    # policies = MultiAgentPolicyManager([RandomPolicy()], env)
 
+    # # Step 4: Convert the env to vector format
+    # env = DummyVectorEnv([lambda: env])
 
-    def _init_buffer(
-        self
-    ) -> None:
-        """Initialize replay buffer for each agent for warm-up steps
-        """
-        tensordict = self.env.reset()
-        print(f"Starting warm-up steps for {self.args.warm_up_steps} steps")
+    # # Step 5: Construct the Collector, which interfaces the policies with the vectorised environment
+    # collector = Collector(policies, env)
 
-        for i in tqdm(range(self.args.warm_up_steps)):
-            with torch.no_grad():
-                tensordict = tensordict.to(self.device)
-                tensordict = self._step_episode(tensordict)
-
-            for _, agent in self.agents.items():                
-                if i > 0:
-                    # do not log the first step because actions are taken randomly
-                    agent.replay_buffer.add(tensordict.clone())                   
-
-
-    def get_centralized_data(
-            self,
-            agent_id: str,
-            tensordict: TensorDict
-            ) -> None:
-        """Get centralized data from decentralized data
-        """
-        if self.config.agent_config.agent_class.__name__ == "SocialInfluenceAgent":
-            keys = ['logits', 'moa_cf_logits']
-        
-        for key in keys:
-            if agent_id in self.centralized_data:
-                self.centralized_data[agent_id][key] = tensordict.get(key)
-            else:
-                self.centralized_data[agent_id] = {key: tensordict.get(key)}
-
-
-    def _step_episode(
-        self, 
-        tensordict: TensorDict
-    ) -> TensorDict:
-        actions = {}
-        for agent_id, agent in self.agents.items():
-            # Switch to eval mode for environment interaction
-            agent.set_eval()
-            output = agent.act(tensordict.clone())
-            if isinstance(output, torch.Tensor):
-                action = output
-            else:
-                action = output["action"]
-            if len(action.shape) == 2:
-                action = torch.argmax(action, dim=1)[0]
-            actions[agent_id] = action
-    
-            if hasattr(self.config.agent_config, 'intr_reward_weight'):
-                # intrinsic reward can be computed in decentralized way 
-                if hasattr(agent, 'intr_reward'):
-                    assert self.decentralized, \
-                        "Intrinsic reward can only exist now when decentralized is True"
-                    self.reward_standardizer.update(agent.intr_reward)
-                    intr_reward = self.reward_standardizer.standardize(agent.intr_reward)
-                    self._step_intr_reward[agent_id] = intr_reward
-                else:
-                    if isinstance(output, TensorDict):       
-                        self.get_centralized_data(agent_id, output)
-
-        tensordict["action"] = deepcopy(actions)
-        tensordict = self.env.step(tensordict.detach().cpu())        
-        tensordict["prev_action"] = deepcopy(actions)
-        # if not decentralized, we need to compute intrinsic reward after 
-        # relevant data is collected        
-        if not self.decentralized and self.centralized_data:                       
-            for agent_id, agent in self.agents.items():
-                intr_reward = agent.compute_intr_reward(agent_id, self.centralized_data)
-                self.reward_standardizer.update(intr_reward)
-                intr_reward = self.reward_standardizer.standardize(intr_reward)
-                self._step_intr_reward[agent_id] = intr_reward
-            self.centralized_data = {}  # reset centralized data    
-        
-        # combine intrinsic reward with extrinsic reward (the intrinsic reward is already scaled)
-        if hasattr(self, '_step_intr_reward') and self._step_intr_reward:            
-            tensordict["intr_reward"] = deepcopy(self._step_intr_reward)
-            self._step_intr_reward = {}
-            for agent_id, intr_reward in tensordict["intr_reward"].items():
-                extr_reward = tensordict.get(("next", "reward", agent_id))
-                tensordict.set(("extr_reward", agent_id), extr_reward)
-                tensordict.set(("next", "reward", agent_id), intr_reward + extr_reward)
-        return tensordict
-
-
-    def convert_wm_to_actor_tensordict(
-        self, 
-        tensordict: TensorDict, 
-        agent_id: str,
-        required_keys: List[str] = ["observation", "done", "action", "latent", "next"]
-    ) -> TensorDict:
-        """Convert world model's tensordict to actor's tensordict, i.e., 
-        make sure each key only has tensor value for current agent
-        """
-        tensordict_out = TensorDict({}, batch_size=tensordict.batch_size)
-        for key in required_keys:
-            if isinstance(tensordict[key], TensorDict):
-                if key == "next":                    
-                    tensordict = self.convert_wm_to_actor_tensordict(
-                        tensordict[key], 
-                        agent_id, 
-                        required_keys=[
-                            "observation", "done", "reward"
-                        ]
-                    )
-                    tensordict_out[key] = tensordict
-                else:
-                    if key == "action":
-                        # convert action to one-hot vector in one line 
-                        action = tensordict.get((key, agent_id))
-                        action = torch.nn.functional.one_hot(
-                            action, 
-                            num_classes=self.env.action_spec[agent_id].space.n
-                        )
-                        tensordict_out[key] = action
-                    else:
-                        tensordict_out[key] = tensordict.get((key, agent_id))            
-
-            elif isinstance(tensordict[key], torch.Tensor):
-                tensordict_out[key] = tensordict.get(key)
-            else:
-                raise NotImplementedError(f"Type of {key} is {type(tensordict[key])} which is not supported")
-            
-        return tensordict_out        
-
-
-    def train_episode(
-        self,
-        episode: int,
-        tensordict: TensorDict,
-        tensordict_test: Optional[TensorDict] = None
-        ) -> None:
-        """Train agents for one episode, in a parallelized environment env.step() takes all 
-        agents' actions as input and returns the next obs, reward, done, info for each agent
-        """
-        for t in tqdm(range(self.args.max_episode_len)):
-            self.step += 1
-            with torch.no_grad():
-                # Disable gradient computation
-                tensordict = tensordict.to(self.device)          
-                tensordict = self._step_episode(tensordict)
-                # evaluating in test environment
-                if tensordict_test is not None:
-                    tensordict_test = tensordict_test.to(self.device)
-                    tensordict_test = self._step_episode(tensordict_test)
-
-            for agent_id, agent in self.agents.items():
-                # keep adding new experience
-                agent.replay_buffer.add(tensordict.clone())
-                # log reward (intrinsic and extrinsic)
-                if 'intr_reward' in tensordict.keys():
-                    intr_reward = tensordict.get(("intr_reward", agent_id)).item()
-                    wandb.log(
-                        {f"{agent_id}_intr_reward": intr_reward},
-                        step=self.step
-                        )
-                    extr_reward = tensordict.get(("extr_reward", agent_id)).item()
-                    wandb.log(
-                        {f"{agent_id}_reward": extr_reward},
-                        step=self.step
-                        )
-                else:
-                    wandb.log(
-                        {f"{agent_id}_reward": tensordict.get(('next', 'reward', agent_id)).item()},
-                        step=self.step
-                        )
-                
-                # log test reward
-                if tensordict_test is not None:
-                    if 'intr_reward' in tensordict_test.keys():
-                        intr_reward_test = tensordict_test.get(("intr_reward", agent_id)).item()
-                        wandb.log(
-                            {f"{agent_id}_intr_reward_test": intr_reward_test},
-                            step=self.step
-                            )
-                        extr_reward_test = tensordict_test.get(("extr_reward", agent_id)).item()
-                        wandb.log(
-                            {f"{agent_id}_reward_test": extr_reward_test},
-                            step=self.step
-                            )                        
-                    else:
-                        wandb.log(
-                            {f"{agent_id}_reward_test": tensordict_test.get(('next', 'reward', agent_id)).item()},
-                            step=self.step
-                            )
-            
-            if tensordict['done'].all():
-                return
-        
-            if t > 0:
-                # update wm and actor
-                for agent_id, agent in self.agents.items():
-                    # swtich to train mode for learning
-                    agent.set_train()  
-                    tensordict_batch = agent.replay_buffer.sample().to(self.device)                          
-                    wm_loss_dict, tensordict_wm = agent.update_wm_grads(tensordict_batch)
-                    tensordict_actor = self.convert_wm_to_actor_tensordict(tensordict_wm, agent_id)
-                    actor_loss_dict = agent.update_actor_grads(tensordict_actor)
-                    agent.step_optimizer()
-                    # log wm_dict and actor_dict
-                    for key, value in wm_loss_dict.items():
-                        wandb.log(
-                            {f"{agent_id}_wm_{key}": value},
-                            step=self.step
-                            )
-                    for key, value in actor_loss_dict.items():
-                        wandb.log(
-                            {f"{agent_id}_{key}": value},
-                            step=self.step
-                        )
-        
-        for agent_id, agent in self.agents.items():
-            model_save_path = f"{self.checkpoint_dir}/{agent_id}_ep{episode}_model_weights.pth"
-            agent.save_model_weights(model_save_path)
-            
-
-    def train(self) -> None:
-        self.step = 0
-        for episode in tqdm(range(self.args.num_episodes)):            
-            tensordict = self.env.reset(seed=episode)            
-            test_env_seed = self._get_test_env_seed()
-            tensordict_eval = self.test_env.reset(seed=test_env_seed)
-            self.train_episode(episode, tensordict, tensordict_eval)
-
-
-
-if __name__ == '__main__':
-    args = parse_args()
-    trainer = Trainer(args)
-    trainer.train()
+    # # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
+    # result = collector.collect(n_episode=2)
+    # print(f"\n==========Random Result==========\n{result}")
