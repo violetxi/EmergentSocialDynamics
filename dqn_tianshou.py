@@ -166,8 +166,7 @@ if __name__ == "__main__":
         update_per_step=0.1,
         test_in_train=False,
         reward_metric=reward_metric,
-    )
-
+    )    
     eval_collector = Collector(policy, test_envs)
     test_result = test_collector.collect(n_episode=2)
     # return result, policy.policies[agents[1]]

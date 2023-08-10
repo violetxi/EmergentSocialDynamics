@@ -9,6 +9,7 @@ pettingzoo == 1.22.0
 git+https://github.com/thu-ml/tianshou
 """
 import os
+import sys
 import argparse
 import  numpy as np
 import cv2 
@@ -22,14 +23,15 @@ from torchvision.transforms import (
     ToTensor    
 )
 
-from tianshou.data import Batch
 from tianshou.policy import PPOPolicy, MultiAgentPolicyManager
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
-from tianshou.env import PettingZooEnv
+from tianshou.env import PettingZooEnv, DummyVectorEnv
 from pettingzoo.utils.conversions import parallel_to_aec
 
 from pettingzoo_env import parallel_env
+#sys.path.append('/ccn2/u/ziyxiang/EmergentSocialDynamics')
+from tianshou_srl.data.collector import Collector
 
 
 def get_args():
@@ -57,7 +59,10 @@ def get_args():
 
 def get_env(env_kwargs):
     # Step 1: Load ssd environment
-    env = parallel_env(env_kwargs, render_mode="rgb_array")
+    env = parallel_env(
+        env_kwargs, 
+        render_mode="rgb_array", 
+        collect_frames=True)
     env = parallel_to_aec(env)
     # Step 2: Wrap the environment for Tianshou interfacing
     env = PettingZooEnv(env)
@@ -119,6 +124,7 @@ if __name__ == "__main__":
         beta=0.0
     )    
     env = get_env(env_args)
+    agents = env.agents       
     # seed
     seed = 0    
     torch.manual_seed(seed)
@@ -136,10 +142,10 @@ if __name__ == "__main__":
             torch.nn.init.zeros_(m.bias)
 
     optim = torch.optim.Adam(actor_critic.parameters(), lr=1e-4)
-    dist = torch.distributions.Categorical
+    dist = torch.distributions.Categorical    
     # args
     args=get_args()
-    dqn_agent = PPOPolicy(
+    ppo_agent = PPOPolicy(
         actor,
         critic,
         optim,
@@ -158,10 +164,52 @@ if __name__ == "__main__":
         advantage_normalization=args.norm_adv,
         recompute_advantage=args.recompute_adv
     )
-    all_agents = [dqn_agent]
-    policy = MultiAgentPolicyManager(all_agents, env)
-    agents = env.agents    
-    # Step 3: Define policies for each agent    
+    all_agents = [ppo_agent]
+    policy = MultiAgentPolicyManager(all_agents, env)    
+    policy.policies['agent-0'].load_state_dict(torch.load(args.ckpt_path))
+    policy.eval()
+    # prepare collector and get results
+    env = DummyVectorEnv([lambda: env]) 
+    eval_collector = Collector(policy, env, exploration_noise=True) 
+    eval_result = eval_collector.collect(n_episode=2, collect_frames=True)
+    # save video
+    video_dir = os.path.join(os.path.dirname(args.ckpt_path), 'videos')
+    os.makedirs(video_dir, exist_ok=True)
+    model_str = args.ckpt_path.split('/')[-3]
+    params_str = args.ckpt_path.split('/')[-2]    
+    frames = eval_result['frames']    
+    for ep_n in range(len(frames)):
+        ep_frames = frames[ep_n]
+        video_path = os.path.join(video_dir, f'{model_str}_{params_str}_{ep_n}.mp4')
+        save_video(frames, video_path)    
+    # print results
+    print(f"Reward for {len(frames)} episodes for {len(agents)} agents")
+    print(f"Mean total reward across episode: {eval_result['rews']}")
+    print(f"std: {eval_result['rews_std']}")
+
+    
+
+    # for n in range(num_episodes):
+    #     frames = []
+    #     rewards = []
+    #     obs, info = env.reset(seed=n)
+    #     batch_obs = Batch(dict(obs=obs, info=info))        
+    #     for i in range(test_steps):        
+    #         agent_out = agent_policy(batch_obs)
+    #         action = agent_out.act.item()
+    #         obs, reward, done, truncation, info = env.step(action)
+    #         frames.append(env.render())
+    #         batch_obs = Batch(dict(obs=obs, info=info))
+    #         rewards.append(reward)
+    #     video_path = os.path.join(video_dir, f'{model_str}_{params_str}_{n}.mp4')  
+    #     save_video(frames, video_path)
+
+    #     print(f"Episode {i+1}:")
+    #     print(f"Average reward: {np.mean(rewards)}")
+    #     print(f"Std of reward: {np.std(rewards)}")  
+    #     print(f"Max reward: {np.max(rewards)}")     
+
+# Step 3: Define policies for each agent    
     # policies = MultiAgentPolicyManager([RandomPolicy()], env)
 
     # # Step 4: Convert the env to vector format
@@ -173,39 +221,3 @@ if __name__ == "__main__":
     # # Step 6: Execute the environment with the agents playing for 1 episode, and render a frame every 0.1 seconds
     # result = collector.collect(n_episode=2)
     # print(f"\n==========Random Result==========\n{result}")
-
-
-    # ======== Step 4: Load trained policy and set to eval mode =========
-    agent_policy = policy.policies['agent-0']
-    #agent_policy.load_state_dict(torch.load('log/harvest/ppo/policy.pth'))
-    agent_policy.load_state_dict(torch.load(args.ckpt_path))
-    agent_policy.eval()
-
-
-    # ======== Step 5: Test the trained policy ========
-    num_episodes = 5
-    test_steps = 1000
-    # video save path
-    video_dir = os.path.join(os.path.dirname(args.ckpt_path), 'videos')
-    os.makedirs(video_dir, exist_ok=True)
-    model_str = args.ckpt_path.split('/')[-3]
-    params_str = args.ckpt_path.split('/')[-2]
-    for n in range(num_episodes):
-        frames = []
-        rewards = []
-        obs, info = env.reset(seed=n)
-        batch_obs = Batch(dict(obs=obs, info=info))        
-        for i in range(test_steps):        
-            agent_out = agent_policy(batch_obs)
-            action = agent_out.act.item()
-            obs, reward, done, truncation, info = env.step(action)
-            frames.append(env.render())
-            batch_obs = Batch(dict(obs=obs, info=info))
-            rewards.append(reward)
-        video_path = os.path.join(video_dir, f'{model_str}_{params_str}_{n}.mp4')  
-        save_video(frames, video_path)
-
-        print(f"Episode {i+1}:")
-        print(f"Average reward: {np.mean(rewards)}")
-        print(f"Std of reward: {np.std(rewards)}")  
-        print(f"Max reward: {np.max(rewards)}")     

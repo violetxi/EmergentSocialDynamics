@@ -18,7 +18,8 @@ class parallel_env(ParallelEnv):
             self, 
             env_kwargs: Dict[str, Any],
             max_cycles: int =5000,            
-            render_mode: str =None,            
+            render_mode: str =None,
+            collect_frames: bool =False,
             ) -> None:
         """
         The init method takes in environment arguments and
@@ -34,9 +35,10 @@ class parallel_env(ParallelEnv):
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents))))
         )
-        self.max_cycles = max_cycles
+        self.max_cycles = max_cycles  
         self.render_mode = render_mode
-        self.steps = 0
+        self.collect_frames = collect_frames
+        self.steps = 0        
 
     # Observation space should be defined here.
     # lru_cache allows observation and action spaces to be memoized, reducing clock cycles required to get each agent's space.
@@ -71,7 +73,18 @@ class parallel_env(ParallelEnv):
                 "You are calling render method without specifying any render mode."
             )
             return
-        return self._env.render(mode=self.render_mode)    
+        return self._env.render(mode=self.render_mode)
+    
+    def collect_frame(self, infos):
+        # this is done because PettingZoo ACEnv expects non-empty infos 
+        # for each agent, so we add the frames to the last agent's info
+        for i, agent in enumerate(self.agents):
+            frame = self.render()
+            if i == len(self.agents) - 1:
+                infos[agent]['frame'] = frame
+            else:
+                infos[agent]['frame'] = []
+        return infos
 
     def reset(self, seed=None, options=None):
         """
@@ -82,7 +95,7 @@ class parallel_env(ParallelEnv):
         the number of steps in the current episode.
         Returns the observations for each agent
         """
-        self.steps = 0
+        self.steps = 0        
         self.agents = self.possible_agents[:]        
         obs = self._env.reset()
         observations = {}
@@ -91,8 +104,10 @@ class parallel_env(ParallelEnv):
                 'observation': ob, 
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-    
         infos = {agent: {} for agent in self.agents}
+        if self.collect_frames:
+            self.collect_frame(infos)
+
         return observations, infos
 
     def step(self, actions):
@@ -117,6 +132,11 @@ class parallel_env(ParallelEnv):
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
         truncations = {agent: False for agent in self.agents}
+
+        if self.collect_frames:
+            if self.collect_frames:
+                self.collect_frame(infos)
+        
         return observations, rewards, terminations, truncations, infos
     
 
