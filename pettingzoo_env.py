@@ -16,7 +16,7 @@ class parallel_env(ParallelEnv):
 
     def __init__(
             self, 
-            env_kwargs: Dict[str, Any],
+            base_env_kwargs: Dict[str, Any],
             max_cycles: int =5000,            
             render_mode: str =None,
             collect_frames: bool =False,
@@ -29,7 +29,7 @@ class parallel_env(ParallelEnv):
 
         These attributes should not be changed after initialization.
         """        
-        self._env = get_env_creator(**env_kwargs)
+        self._env = get_env_creator(**base_env_kwargs)
         self.possible_agents = list(self._env.agents.keys())
         # optional: a mapping between agent name and ID
         self.agent_name_mapping = dict(

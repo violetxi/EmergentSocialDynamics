@@ -2,13 +2,6 @@
 # tqdm
 # typeguard
 # numpy-stl
-# torch
-# torchvision
-# pettingzoo[all]
-# #torchrl
-# pytest
-# pyyaml
-# pytest-instafail
 # jupyter
 # seaborn
 matplotlib
@@ -17,3 +10,7 @@ pettingzoo[all]==1.23.0
 packaging==21.3
 tianshou==0.5.0
 wandb==0.15.8
+torch==2.0.1+cu117
+torchvision==0.15.2+cu117
+pyyaml==6.0.1
+typeguard==4.1.0
