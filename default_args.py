@@ -23,3 +23,4 @@ class DefaultGlobalArgs:
     logdir: str = 'log'
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
     
+    

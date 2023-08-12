@@ -1,4 +1,5 @@
 import os
+import datetime
 import argparse
 import numpy as np
 import torch
@@ -67,11 +68,21 @@ class CNN(nn.Module):
         ])
 
     def forward(self, obs, state=None, info={}):        
-        transformed_obs = torch.stack([self.preprocessing(ob) for ob in obs.obs.curr_obs])        
+        transformed_obs = torch.stack([self.preprocessing(ob) for ob in obs.obs.curr_obs])
         embds = self.encoder(transformed_obs.to("cuda"))
         logits = embds
         return logits, state
     
+
+class DummyDist(torch.distributions.Categorical):
+    def __init__(self, probs=None, logits=None, validate_args=None):
+        super().__init__(probs=probs, logits=logits, validate_args=validate_args)
+
+    def sample(self, sample_shape=torch.Size()):
+        action = torch.Tensor([7]).long().to("cuda")
+        # print(f"Dummy action {action}")
+        return action
+
 
 class TrainRunner:
     def __init__(
@@ -110,7 +121,8 @@ class TrainRunner:
         self.train_envs = DummyVectorEnv([lambda : self.env])
         self.test_envs = DummyVectorEnv([lambda : self.env])
 
-    def _setup_single_agent(self) -> None:
+    #def _setup_single_agent(self) -> PPOPolicy:
+    def _setup_single_agent(self, agent_id) -> PPOPolicy:
         net = CNN(self.net_config)
         action_shape = self.env.action_space.n
         device = self.args.device
@@ -123,12 +135,18 @@ class TrainRunner:
                 torch.nn.init.orthogonal_(m.weight)
                 torch.nn.init.zeros_(m.bias)
         optim = torch.optim.Adam(actor_critic.parameters(), lr=self.args.lr)
-        dist = torch.distributions.Categorical
+        # @TODO: remove this later just using this to figure out 
+        # if reward is distributed correctly per agent
+        if agent_id == 'agent-0':
+            dist = DummyDist
+        else:
+            dist = torch.distributions.Categorical        
+        
         policy = PPOPolicy(
             actor=actor,
             critic=critic,
             optim=optim,
-            dist=dist,
+            dist_fn=dist,
             discount_factor=self.args.gamma,
             **self.policy_config
         )
@@ -137,8 +155,9 @@ class TrainRunner:
     def _setup_agents(self) -> None:
         all_agents = {}
         for agent in self.env.agents:
-            all_agents[agent] = self._setup_single_agent()
-        self.policy = MultiAgentPolicyManager(list(all_agents.values()))
+            #all_agents[agent] = self._setup_single_agent()
+            all_agents[agent] = self._setup_single_agent(agent)
+        self.policy = MultiAgentPolicyManager(list(all_agents.values()), self.env)
 
     def _setup_collectors(self) -> None:
         self.train_collector = Collector(
@@ -146,36 +165,53 @@ class TrainRunner:
             self.train_envs,
             VectorReplayBuffer(self.args.buffer_size, len(self.train_envs)),
             exploration_noise=True,
-        )
+            )
         self.test_collector = Collector(
             self.policy, 
             self.test_envs, 
-            exploration_noise=True)
+            exploration_noise=True,
+            )
 
+    def _get_save_path(self):
+        default_args = vars(DefaultGlobalArgs())
+        curr_args = vars(self.args)
+        args_diffs = []
+        for k, v in curr_args.items():
+            # only 'config' will not be included in the DefaultGlobalArgs
+            if k == 'config':
+                args_diffs.insert(
+                    0, f'{v.split("/")[-1].split(".")[0]}'
+                    )
+            else:
+                if v != default_args[k]:
+                    args_diffs.append(f'{k}_{curr_args[k]}')
+        return '-'.join(args_diffs)
 
     """ Defining call back functions """
     def save_best_fn(self, policy):
-        model_save_folder =os.path.join(
-            self.args.logdir, 
-            self.env_name, 'ppo', f'ent_coef-{args.ent_coef}'
-            )
-        model_save_path = os.path.join(model_save_folder, "best_policy.pth")
-        os.makedirs(model_save_folder, exist_ok=True)           
-        torch.save(policy.policies[agents[0]].state_dict(), model_save_path)
+        for agent_id in self.env.agents:
+            model_save_path = os.path.join(
+                self.log_path, f"best_policy-{agent_id}.pth")
+            torch.save(policy.policies[agent_id].state_dict(), model_save_path)
 
-    def stop_fn(mean_rewards):
+    def stop_fn(self, mean_rewards):
         return mean_rewards >= args.reward_threshold
 
-    def reward_metric(rews):   
-        return rews[:, 0]
+    def reward_metric(self, rews):
+        # rews: (n_ep, n_agent)        
+        return rews
     
 
     def run(self) -> None:
         args = self.args
-        # log
-        log_path = os.path.join(args.logdir, self.env_name, 'ppo', f'ent_coef-{args.ent_coef}')
-        writer = SummaryWriter(log_path)
-        logger = WandbLogger(writer)
+        log_name = self._get_save_path()
+        cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        wandb_run_name = f"{log_name}-{cur_time}"
+        # log        
+        self.log_path = os.path.join(args.logdir, log_name)
+        os.makedirs(self.log_path, exist_ok=True)        
+        # logger = WandbLogger(name=wandb_run_name)
+        # logger.load(SummaryWriter(self.log_path))
         # run trainer
         train_result = onpolicy_trainer(
             self.policy,
@@ -190,7 +226,7 @@ class TrainRunner:
             reward_metric=self.reward_metric,    # used in Collector
             step_per_collect=args.step_per_collect,
             stop_fn=self.stop_fn,
-            logger=logger
+            #logger=logger
             )
         # run testing
         self.policy.eval()
@@ -201,3 +237,4 @@ class TrainRunner:
 if __name__ == "__main__":
     args = get_args()
     train_runner = TrainRunner(args)
+    train_runner.run()
