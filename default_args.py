@@ -18,8 +18,8 @@ class DefaultGlobalArgs:
     step_per_collect: int = 2000
     repeat_per_collect: int = 10
     batch_size: int = 2048
-    training_num: int = 20
-    test_num: int = 3    
+    training_num: int = 2
+    test_num: int = 2
     logdir: str = 'log'
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
     

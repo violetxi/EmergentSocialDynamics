@@ -111,9 +111,12 @@ class parallel_env(ParallelEnv):
         return observations
 
     def step(self, actions):
-        """
-        #@TODO: doc strings
-        step(action) takes in an action for each agent and should return the
+        #@TODO: it's better to return things as np.array and use index to keep track of 
+        # agents
+        """        
+        :param actions: a dict of actions for each agent
+
+        :return: observations, rewards, dones, infos        
         - observations
         - rewards
         - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
@@ -130,15 +133,16 @@ class parallel_env(ParallelEnv):
                 'observation': ob, 
                 #'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-        # reward            
-        rewards = np.array(list(rewards.values()))
+        breakpoint()
+        # reward
+        #rewards = np.array(list(rewards.values()))        
         # done
         if self.steps == self.max_cycles:
             terminations = {agent: True for agent in self.agents}
         # __all__ is a special key for PettingZoo envs that indicates all agents are done        
         if '__all__' in terminations:
             del terminations['__all__']
-        terminations = np.array(list(terminations.values()))
+        #terminations = np.array(list(terminations.values()))
         
         if self.collect_frames:
             if self.collect_frames:

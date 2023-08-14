@@ -10,7 +10,7 @@ import wandb
 import numpy as np
 
 from tianshou.utils.net.discrete import Actor, Critic
-
+from tianshou.policy import PPOPolicy, MultiAgentPolicyManager
 
 from tianshou_elign.data import Collector, ReplayBuffer
 from tianshou_elign.env import (
@@ -199,8 +199,7 @@ def train_multi_sacd(args=get_args()):
     critic1_optims = [Adam(critic1.parameters(), lr=args.critic_lr)
                       for critic1 in critic1s]
     critic2_optims = [Adam(critic2.parameters(), lr=args.critic_lr)
-                      for critic2 in critic2s]
-    
+                      for critic2 in critic2s]    
     # Policy
     dist = torch.distributions.Categorical
     agent_ids = train_envs.envs[0].possible_agents

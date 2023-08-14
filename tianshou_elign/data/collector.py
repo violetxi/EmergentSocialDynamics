@@ -133,9 +133,11 @@ class Collector(object):
         self.reward_aggregator = reward_aggregator
         self.reward_logger = reward_logger
         self.benchmark_logger = benchmark_logger
-        self.reset()
+        #self.reset()
+        self.reset_stat()
 
-    def reset(self) -> None:
+    #def reset(self) -> None:
+    def reset_stat(self) -> None:
         """Reset all related variables in the collector."""
         # state over batch is either a list, an np.ndarray, or a torch.Tensor
         self.reset_env()
@@ -296,11 +298,18 @@ class Collector(object):
                 with torch.no_grad():
                     result = self.policy(batch)
 
-            # get hidden state
+            # @TODO: get hidden state implement this when model needs it
             self.state = result.get('state', None)
-
             # Take environment step.
-            self._act = to_numpy(result.act)
+            # need to convert action from {agent_id: action (env_num,)} 
+            # to np.array (env_num, agent_num)
+            agent_ids = self.env.possible_agents[0]
+            self._act = np.array([[0 for _ in agent_ids] for _ in range(self.env_num)])            
+            for agent_id, v in result.items():                
+                for i in range(self.env_num):
+                    agent_idx = agent_ids.index(agent_id)
+                    self._act[i][agent_idx] = to_numpy(v.act[i])
+            
             obs_next, self._rew, self._done, self._info = self.env.step(
                 self._act if self._multi_env else self._act[0])            
 
@@ -338,8 +347,9 @@ class Collector(object):
                 obs_next = result.get('obs_next', obs_next)
                 self._info = result.get('info', self._info)
 
-            # Update cummulative rewards.
+            # Update cummulative rewards.            
             self.length += 1
+            breakpoint()
             if self._rew.ndim == 1:
                 self.reward = self.reward_agg.add(self._rew).reshape(
                         self.env_num, 1)
