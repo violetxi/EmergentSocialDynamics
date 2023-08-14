@@ -199,7 +199,7 @@ class VecTotal(object):
     def reset(self, start: int, end: int=None) -> np.ndarray:
         if end is None:
             end = start + 1
-        self.values[start:end] = 0.0
+        self.values[start:end] = 0.0        
         return self.get()
 
     def add(self, x: Union[list, np.ndarray, torch.Tensor]) -> np.ndarray:

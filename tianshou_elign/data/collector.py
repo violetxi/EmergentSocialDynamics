@@ -3,6 +3,7 @@ import time
 import torch
 import warnings
 import numpy as np
+from copy import deepcopy
 from typing import Any, Dict, List, Union, Optional, Callable
 
 from tianshou_elign.utils import MovAvg, VecMovAvg, VecTotal
@@ -32,7 +33,7 @@ class Collector(object):
         has been added to the buffer, see issue #42, defaults to ``None``.
     :param int stat_size: for the moving average of recording speed, defaults
         to 100.
-    :param reward_aggregator: support either VecTotal or VecMovAvg.
+    :param reward_aggregator: support either VecTotal or VecMovAvg. 
     :param reward_logger: supports custom reward logging.
 
     The ``preprocess_fn`` is a function called before the data has been added
@@ -96,15 +97,14 @@ class Collector(object):
                  initialize_state_fn: Callable[[Any], Union[dict, Batch]]
                  = None,
                  stat_size: Optional[int] = 100,
-                 num_agents: Optional[int] = 1,
                  reward_aggregator: object = VecTotal,
                  reward_logger: object = BaseRewardLogger,
                  benchmark_logger: object = None,
                  **kwargs) -> None:
         super().__init__()
         self.env = env
-        self.env_num = 1
-        self.num_agents = num_agents
+        self.env_num = len(env)        
+        self.num_agents = len(env.possible_agents[0])
         self.collect_time = 0
         self.collect_step = 0
         self.collect_episode = 0
@@ -118,7 +118,6 @@ class Collector(object):
         # need multiple cache buffers only if storing in one buffer
         self._cached_buf = []
         if self._multi_env:
-            self.env_num = len(env)
             if isinstance(self.buffer, list):
                 assert len(self.buffer) == self.env_num, \
                     'The number of data buffer does not match the number of ' \
@@ -133,10 +132,8 @@ class Collector(object):
         self.reward_aggregator = reward_aggregator
         self.reward_logger = reward_logger
         self.benchmark_logger = benchmark_logger
-        #self.reset()
         self.reset_stat()
 
-    #def reset(self) -> None:
     def reset_stat(self) -> None:
         """Reset all related variables in the collector."""
         # state over batch is either a list, an np.ndarray, or a torch.Tensor
@@ -260,12 +257,18 @@ class Collector(object):
             * ``v/st`` the speed of steps per second.
             * ``v/ep`` the speed of episode per second.
             * ``rew`` the mean reward over collected episodes.
+            * ``rews`` (n_ep, n_agents) the total reward for each agent 
+                        over collected episodes.
             * ``len`` the mean length over collected episodes.
         """
         warning_count = 0
         if not self._multi_env:
             n_episode = np.sum(n_episode)
         start_time = time.time()
+        if n_step is None:
+            n_step = 0
+        if n_episode is None:
+            n_episode = 0            
         assert sum([(n_step != 0), (n_episode != 0)]) == 1, \
             "One and only one collection number specification is permitted!"
         cur_step = 0
@@ -273,6 +276,8 @@ class Collector(object):
         reward_logger = self.reward_logger()
         length_sum = 0
         frames = []
+        # keep tracks of total reward for each agent over collected episodes
+        ep_total_reward = []
         while True:
             if warning_count >= 100000:
                 warnings.warn(
@@ -334,7 +339,7 @@ class Collector(object):
                 if render > 0:
                     time.sleep(render)
 
-            # Preprocess new batch of data.
+            # Preprocess new batch of data with step-wise information
             if self.preprocess_fn:
                 result = self.preprocess_fn(Batch(
                     obs=self._obs, act=self._act, rew=self._rew,
@@ -347,24 +352,26 @@ class Collector(object):
                 obs_next = result.get('obs_next', obs_next)
                 self._info = result.get('info', self._info)
 
-            # Update cummulative rewards.            
-            self.length += 1
-            breakpoint()
+            # Update cummulative rewards. 
+            # self._rew: (num_env, num_agents) is step reward 
+            # self.reward: (num_env, num_agents) is cummulative rewards
+            self.length += 1            
             if self._rew.ndim == 1:
                 self.reward = self.reward_agg.add(self._rew).reshape(
                         self.env_num, 1)
             else:
                 self.reward = self.reward_agg.add(self._rew.reshape(
                         self.env_num * self.num_agents)).reshape(
-                                self.env_num, self.num_agents)
+                                self.env_num, self.num_agents)            
 
-            if self._multi_env:
+            # Add data to buffer and update episode information with logging for multi-agent envs
+            if self._multi_env:           
                 for i in range(self.env_num):
                     data = {
                         'obs': self._obs[i], 'act': self._act[i],
                         'rew': self._rew[i], 'done': self._done[i],
                         'obs_next': obs_next[i], 'info': self._info[i],
-                    }                    
+                    }
                     if self._cached_buf:
                         warning_count += 1
                         self._cached_buf[i].add(**data)
@@ -377,7 +384,9 @@ class Collector(object):
                         if self.buffer is not None:
                             self.buffer.add(**data)
                         cur_step += 1
-                    if np.all(self._done[i]):
+
+                    # when all environment terminates, update reward_logger, self.reward                                    
+                    if np.all(self._done[i]):                        
                         if n_step != 0 or np.isscalar(n_episode) or \
                                 cur_episode[i] < n_episode[i]:
                             cur_episode[i] += 1
@@ -387,13 +396,16 @@ class Collector(object):
                                 cur_step += len(self._cached_buf[i])
                                 if self.buffer is not None:
                                     self.buffer.update(self._cached_buf[i])
+                        ep_total_reward.append(deepcopy(self.reward[i]))
                         self.reward = self.reward_agg.reset(
-                                i*self.num_agents, (i+1)*self.num_agents)
+                                i*self.num_agents, (i+1)*self.num_agents).reshape(
+                            self.env_num, self.num_agents)
                         if self.benchmark_logger:
                             self.benchmark_logger.episode_end(i)
                         self.length[i] = 0
                         if self._cached_buf:
                             self._cached_buf[i].reset()
+                # if any environment terminates, reset its state and environment
                 if np.any(self._done):
                     done_envs = np.where(self._done[:, 0])[0]
                     self._reset_state(done_envs)                    
@@ -403,7 +415,7 @@ class Collector(object):
                             Batch(obs=obs_next),
                             )
                          obs_next = resnext.get('obs', obs_next)
-                         #self._policy = resnext.get('policy', self._policy)
+                         
                 if n_episode != 0:
                     if isinstance(n_episode, list) and \
                             (cur_episode >= np.array(n_episode)).all() or \
@@ -415,13 +427,13 @@ class Collector(object):
                     self.buffer.add(
                         self._obs[0], self._act[0], self._rew[0],
                         self._done[0], obs_next[0], self._info[0],
-                    )
-                        #self._policy[0])
+                    )                      
                 cur_step += 1
                 if np.all(self._done):
                     cur_episode += 1
                     reward_logger.add(self.reward[0])
-                    length_sum += self.length
+                    length_sum += self.length                    
+                    ep_total_reward.append(self.reward[i])
                     self.reward = self.reward_agg.reset(0, self.num_agents)
                     if self.benchmark_logger:
                         self.benchmark_logger.episode_end(0)
@@ -429,13 +441,12 @@ class Collector(object):
                     self._reset_state([0])
                     obs_next = self._make_batch(self.env.reset())
                     if self.preprocess_fn:
-                        resnext = self.preprocess_fn(
-                            #Batch(obs=obs_next, policy=self._policy), id=0)
+                        resnext = self.preprocess_fn(                            
                             Batch(obs=obs_next), id=0)
-                        obs_next = resnext.get('obs', obs_next)
-                        #self._policy = resnext.get('policy', self._policy)
+                        obs_next = resnext.get('obs', obs_next)                        
                 if n_episode != 0 and cur_episode >= n_episode:
                     break
+            # 
             if n_step != 0 and cur_step >= n_step:
                 break
             self._obs = obs_next
@@ -452,17 +463,19 @@ class Collector(object):
         self.collect_time += duration
         n_episode = max(cur_episode, 1)
         output = {
-            # 'n/ep': cur_episode,
+            'n/ep': cur_episode,
             'n/st': cur_step,
-            # 'v/st': self.step_speed.get(),
-            # 'v/ep': self.episode_speed.get(),
-            # 'len': length_sum / n_episode,
-        }
-
+            'v/st': self.step_speed.get(),
+            'v/ep': self.episode_speed.get(),
+            'len': length_sum / n_episode,
+            # @TODO: add flexible std computation, currently all episode 
+            # length will be the same
+            'len_std': 0.0,
+        }        
         # Gather rewards to log.
         for k, v in reward_logger.log().items():
-            output[k] = v
-
+            output[k] = v                
+        output['rews'] = np.array(ep_total_reward)
         # Gather benchmark data to log.
         if self.benchmark_logger:
             for k, v in self.benchmark_logger.log().items():
@@ -471,6 +484,7 @@ class Collector(object):
         # Store rendered frames.
         if render and render_mode == 'rgb_array':
             output['frames'] = frames
+
         return output
 
     def sample(self, batch_size: int, global_step: int = None) -> Batch:

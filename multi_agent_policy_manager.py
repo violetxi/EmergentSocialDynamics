@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import gym
 import numpy as np
 
 from tianshou.data import Batch, ReplayBuffer
@@ -22,22 +23,24 @@ class MultiAgentPolicyManager(BasePolicy):
     """
 
     def __init__(
-        self, policies: List[BasePolicy], env: PettingZooEnv, **kwargs: Any
+        self, policies: List[BasePolicy], 
+        env_agents: List[str],
+        action_space: gym.spaces.Space,         
+        **kwargs: Any
     ) -> None:
-        env.action_space = env._env.action_space
-        env.agents = env.possible_agents
-        super().__init__(action_space=env.action_space, **kwargs)
+        super().__init__(action_space=action_space, **kwargs)
         assert (
-             len(policies) == len(env.agents)
+             len(policies) == len(env_agents)
         ), "One policy must be assigned for each agent."
-        
-        self.agent_idx = {agent: i for i, agent in enumerate(env.agents)}
+
+        self.env_agents = env_agents        
+        self.agent_idx = {agent: i for i, agent in enumerate(self.env_agents)}
         for i, policy in enumerate(policies):
             # agent_id 0 is reserved for the environment proxy
             # (this MultiAgentPolicyManager)
-            policy.set_agent_id(env.agents[i])
+            policy.set_agent_id(self.env_agents)
 
-        self.policies = dict(zip(env.agents, policies))
+        self.policies = dict(zip(self.env_agents, policies))
 
     def replace_policy(self, policy: BasePolicy, agent_id: int) -> None:
         """Replace the "agent_id"th policy in this manager."""
@@ -67,7 +70,6 @@ class MultiAgentPolicyManager(BasePolicy):
                 results[agent] = Batch()
                 continue
             tmp_batch, tmp_indice = batch[agent_index], indice[agent_index]
-            breakpoint()
             if has_rew:
                 tmp_batch.rew = tmp_batch.rew[:, self.agent_idx[agent]]
                 buffer._meta.rew = save_rew[:, self.agent_idx[agent]]
@@ -101,6 +103,14 @@ class MultiAgentPolicyManager(BasePolicy):
     ) -> Batch:
         """Dispatch batch data from obs.agent_id to every policy's forward.
 
+        :param batch: a Batch of data with the following keys:
+            'obs' - , 
+            'obs_next', 
+            'rew', 
+            'done', 
+            'act', 
+            'policy', 
+            'info',
         :param state: if None, it means all agents have no state. If not
             None, it should contain keys of "agent_1", "agent_2", ...
 
@@ -109,10 +119,7 @@ class MultiAgentPolicyManager(BasePolicy):
         ::
 
             {
-                "act": {
-                    "agent_1": output action of agent_1's policy for the input
-                    "agent_2": xxx
-                    ...
+                "act": (batch_size, )
                 }
                 "state": {
                     "agent_1": output state of agent_1's policy for the state
@@ -127,16 +134,21 @@ class MultiAgentPolicyManager(BasePolicy):
             }
         """
         # results: List[Tuple[bool, np.ndarray, Batch, Union[np.ndarray, Batch],
-        #                     Batch]] = []
+        #                     Batch]] = []        
         results = {}
+        agent_ids = self.env_agents
         for agent_id, policy in self.policies.items():
             tmp_batch_dict = {}
-            obs = batch.obs.get(agent_id)
+            agent_idx = agent_ids.index(agent_id)            
             for k, v in batch.items():
                 if v is None:
                     tmp_batch_dict[k] = None
                 else:
-                    tmp_batch_dict[k] = v.get(agent_id)
+                    if k in ['obs', 'obs_next']:
+                        tmp_batch_dict[k] = v.get(agent_id)
+                    else:                                        
+                        tmp_batch_dict[k] = v[:, agent_idx]
+
             tmp_batch = Batch(tmp_batch_dict)                        
             out = policy(
                 batch=tmp_batch,
@@ -152,7 +164,8 @@ class MultiAgentPolicyManager(BasePolicy):
                 'act': act,  # shape (B, ) or (N_env, )
                 'state': each_state    # shape (B, ...) or (N_env, ...)
             }
-        holder = Batch(results)    
+        holder = Batch(results) 
+        breakpoint()  
         return holder
 
     def learn(self, batch: Batch,
@@ -173,6 +186,7 @@ class MultiAgentPolicyManager(BasePolicy):
         """
         results = {}
         for agent_id, policy in self.policies.items():
+            breakpoint()
             data = batch[agent_id]
             if not data.is_empty():
                 out = policy.learn(batch=data, **kwargs)

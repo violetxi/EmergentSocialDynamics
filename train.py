@@ -3,6 +3,7 @@ import yaml
 import datetime
 import argparse
 import numpy as np
+from copy import deepcopy
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -118,23 +119,22 @@ class TrainRunner:
     def _load_config(self) -> None:
         with open(self.args.config, 'r') as stream:
             configs = yaml.safe_load(stream)
-        self.env_config = configs['Environment']
+        self.env_config = configs['Environment']        
         self.net_config = configs['Net']
         self.policy_config = configs['PPOPolicy']
 
     def _setup_env(self) -> None:        
-        self.env = get_env(self.env_config)
-        # @TODO: in visualization script, remember to set 
-        # self.env.env.env.env.collect_frames = True
-        # @TODO: allow multiple train and test envs for parallel training
-        self.train_envs = VectorEnv([lambda : self.env for i in range(self.args.training_num)])
-        self.test_envs = VectorEnv([lambda : self.env for i in range(self.args.test_num)])
+        # this is just a dummpy for setting up other things later
+        env = get_env(self.env_config)
+        self.action_space = env._env.action_space
+        self.env_agents = env.possible_agents        
+        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.training_num)])
+        self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.test_num)])
     
     def _setup_single_agent(self, agent_id) -> PPOPolicy:
-        net = CNN(self.net_config)        
-        #action_shape = self.env.action_space.n
-        action_shape = self.env._env.action_space.n
+        net = CNN(self.net_config)
         device = self.args.device
+        action_shape = self.action_space.n
         actor = Actor(net, action_shape, device=device).to(device)
         critic = Critic(net, device=device).to(device)
         actor_critic = ActorCritic(actor, critic)
@@ -163,10 +163,13 @@ class TrainRunner:
 
     def _setup_agents(self) -> None:
         all_agents = {}
-        for agent in self.env.possible_agents:
-            #all_agents[agent] = self._setup_single_agent()
+        for agent in self.env_agents:
             all_agents[agent] = self._setup_single_agent(agent)
-        self.policy = MultiAgentPolicyManager(list(all_agents.values()), self.env)
+        self.policy = MultiAgentPolicyManager(
+            list(all_agents.values()), 
+            self.env_agents,
+            self.action_space
+            )
 
     def _setup_collectors(self) -> None:
         self.train_collector = Collector(
@@ -200,7 +203,7 @@ class TrainRunner:
 
     """ Defining call back functions """
     def save_best_fn(self, policy):
-        for agent_id in self.env.agents:
+        for agent_id in self.env_agents:
             model_save_path = os.path.join(
                 self.log_path, f"best_policy-{agent_id}.pth")
             torch.save(policy.policies[agent_id].state_dict(), model_save_path)

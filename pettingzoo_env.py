@@ -98,17 +98,13 @@ class parallel_env(ParallelEnv):
         self.steps = 0        
         self.agents = self.possible_agents[:]        
         obs = self._env.reset()
-        observations = {}
+        obs_out = {}
         for agent_id, ob in obs.items():
-            observations[agent_id] = {
+            obs_out[agent_id] = {
                 'observation': ob, 
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-        # infos = {agent: {} for agent in self.agents}
-        # if self.collect_frames:
-        #     self.collect_frame(infos)
-
-        return observations
+        return obs_out
 
     def step(self, actions):
         #@TODO: it's better to return things as np.array and use index to keep track of 
@@ -116,39 +112,42 @@ class parallel_env(ParallelEnv):
         """        
         :param actions: a dict of actions for each agent
 
-        :return: observations, rewards, dones, infos        
-        - observations
-        - rewards
-        - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
-        - info
+        :return: observations, rewards, dones, infos in np.ndarray formation and agent are 
+        index in the order of self.possible_agents        
+            - observations: list of observations in dict format for each agent
+            - rewards
+            - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
+            - info
         dicts where each dict looks like {agent_1: item_1, agent_2: item_2}
         """
         self.steps += 1
         actions = dict(zip(self.possible_agents, actions))
         obs, rewards, terminations, infos = self._env.step(actions)                
-        # observations        
-        observations = {}
-        for agent_id, ob in obs.items():
-            observations[agent_id] = {
-                'observation': ob, 
-                #'action_mask': np.ones(self._env.action_space.n, "int8")
-                }
-        breakpoint()
-        # reward
-        #rewards = np.array(list(rewards.values()))        
+        
+        obs_out = {}
+        rewards_out = []
+        terminations_out = []
+
         # done
         if self.steps == self.max_cycles:
             terminations = {agent: True for agent in self.agents}
         # __all__ is a special key for PettingZoo envs that indicates all agents are done        
         if '__all__' in terminations:
             del terminations['__all__']
-        #terminations = np.array(list(terminations.values()))
+
+        for agent_id in self.possible_agents:
+            obs_out[agent_id] = {
+                'observation': obs[agent_id], 
+                'action_mask': np.ones(self._env.action_space.n, "int8")
+                }
+            rewards_out.append(rewards[agent_id])
+            terminations_out.append(terminations[agent_id])            
         
         if self.collect_frames:
             if self.collect_frames:
                 self.collect_frame(infos)
         
-        return observations, rewards, terminations, infos
+        return obs_out, rewards_out, terminations_out, infos
     
 
 
