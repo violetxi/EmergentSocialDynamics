@@ -104,40 +104,47 @@ class parallel_env(ParallelEnv):
                 'observation': ob, 
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-        infos = {agent: {} for agent in self.agents}
-        if self.collect_frames:
-            self.collect_frame(infos)
+        # infos = {agent: {} for agent in self.agents}
+        # if self.collect_frames:
+        #     self.collect_frame(infos)
 
-        return observations, infos
+        return observations
 
     def step(self, actions):
         """
+        #@TODO: doc strings
         step(action) takes in an action for each agent and should return the
         - observations
         - rewards
         - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
-        - truncations
         - info
         dicts where each dict looks like {agent_1: item_1, agent_2: item_2}
         """
         self.steps += 1
-        actions
-        obs, rewards, terminations, infos  = self._env.step(actions)
-        if self.steps == self.max_cycles:
-            terminations = {agent: True for agent in self.agents}
+        actions = dict(zip(self.possible_agents, actions))
+        obs, rewards, terminations, infos = self._env.step(actions)                
+        # observations        
         observations = {}
         for agent_id, ob in obs.items():
             observations[agent_id] = {
                 'observation': ob, 
-                'action_mask': np.ones(self._env.action_space.n, "int8")
+                #'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-        truncations = {agent: False for agent in self.agents}
-
+        # reward            
+        rewards = np.array(list(rewards.values()))
+        # done
+        if self.steps == self.max_cycles:
+            terminations = {agent: True for agent in self.agents}
+        # __all__ is a special key for PettingZoo envs that indicates all agents are done        
+        if '__all__' in terminations:
+            del terminations['__all__']
+        terminations = np.array(list(terminations.values()))
+        
         if self.collect_frames:
             if self.collect_frames:
                 self.collect_frame(infos)
         
-        return observations, rewards, terminations, truncations, infos
+        return observations, rewards, terminations, infos
     
 
 

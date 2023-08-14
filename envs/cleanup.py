@@ -129,7 +129,8 @@ class CleanupEnv(MapEnv):
         map_with_agents = self.get_map_with_agents()
 
         for i in range(self.num_agents):
-            agent_id = "agent-" + str(i)
+            # use `_` for easy indexing in TianShou's Batch object
+            agent_id = "agent_" + str(i)
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()
             # grid = util.return_view(map_with_agents, spawn_point,
