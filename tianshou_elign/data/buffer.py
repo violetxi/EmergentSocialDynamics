@@ -163,6 +163,7 @@ class ReplayBuffer:
             act: Union[np.ndarray, float],
             rew: Union[int, float, np.ndarray],
             done: Union[bool, np.ndarray],
+            #terminated: Union[bool, np.ndarray],
             obs_next: Optional[Union[dict, Batch, np.ndarray]] = None,
             info: dict = {},
             policy: Optional[Union[dict, Batch]] = {},
@@ -173,7 +174,7 @@ class ReplayBuffer:
         self._add_to_buffer('obs', obs)
         self._add_to_buffer('act', act)
         self._add_to_buffer('rew', rew)
-        self._add_to_buffer('done', done)
+        self._add_to_buffer('done', done)        
         if self._save_s_:
             if obs_next is None:
                 obs_next = Batch()
@@ -364,7 +365,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # we have to sacrifice some convenience for speed
         self._weight_sum += np.abs(weight) ** self._alpha - \
             self._meta.__dict__['weight'][self._index]
-        self._add_to_buffer('weight', np.abs(weight) ** self._alpha)
+        self._add_to_buffer('weight', np.abs(weight) ** self._alpha)        
         super().add(obs, act, rew, done, obs_next, info, policy)
         self._check_weight_sum()
 

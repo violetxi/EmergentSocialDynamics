@@ -19,7 +19,6 @@ class parallel_env(ParallelEnv):
             base_env_kwargs: Dict[str, Any],
             max_cycles: int =5000,            
             render_mode: str =None,
-            collect_frames: bool =False,
             ) -> None:
         """
         The init method takes in environment arguments and
@@ -37,7 +36,6 @@ class parallel_env(ParallelEnv):
         )
         self.max_cycles = max_cycles  
         self.render_mode = render_mode
-        self.collect_frames = collect_frames
         self.steps = 0        
 
     # Observation space should be defined here.
@@ -99,12 +97,14 @@ class parallel_env(ParallelEnv):
         self.agents = self.possible_agents[:]        
         obs = self._env.reset()
         obs_out = {}
+        info = {}
         for agent_id, ob in obs.items():
             obs_out[agent_id] = {
                 'observation': ob, 
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
-        return obs_out
+            info[agent_id] = {}
+        return obs_out, info
 
     def step(self, actions):
         #@TODO: it's better to return things as np.array and use index to keep track of 
@@ -122,12 +122,12 @@ class parallel_env(ParallelEnv):
         """
         self.steps += 1
         actions = dict(zip(self.possible_agents, actions))
-        obs, rewards, terminations, infos = self._env.step(actions)                
+        obs, rewards, terminations, info = self._env.step(actions)                
         
         obs_out = {}
         rewards_out = []
         terminations_out = []
-
+        truncations_out = []        
         # done
         if self.steps == self.max_cycles:
             terminations = {agent: True for agent in self.agents}
@@ -141,13 +141,13 @@ class parallel_env(ParallelEnv):
                 'action_mask': np.ones(self._env.action_space.n, "int8")
                 }
             rewards_out.append(rewards[agent_id])
-            terminations_out.append(terminations[agent_id])            
-        
-        if self.collect_frames:
-            if self.collect_frames:
-                self.collect_frame(infos)
-        
-        return obs_out, rewards_out, terminations_out, infos
+            terminations_out.append(terminations[agent_id]) 
+            truncations_out.append(False) # no truncation in SSD
+            info[agent_id] = {}
+        # terminations and truncations are the same for all agents, keep one per
+        # env to be compatible with TianShou Buffer processes
+        return obs_out, rewards_out, np.all(terminations_out), \
+            np.all(truncations_out), info
     
 
 

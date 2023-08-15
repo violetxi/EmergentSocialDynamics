@@ -14,6 +14,7 @@ from torchvision.transforms import (
     ToTensor    
 )
 
+from tianshou.data import VectorReplayBuffer
 from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils import WandbLogger
@@ -21,7 +22,7 @@ from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 
 from pettingzoo_env import parallel_env
-from tianshou_elign.data import Collector, ReplayBuffer
+from tianshou_elign.data import Collector
 from tianshou_elign.env import (
     VectorEnv,
     BaseRewardLogger
@@ -68,8 +69,17 @@ class CNN(nn.Module):
             ToTensor(),                         
         ])
 
+    def preprocess_fn(self, obs):
+            """Preprocess observation in image format
+            """
+            transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])            
+            ob = obs.observation.curr_obs
+            processed_ob = torch.stack([transform(ob_i) for ob_i in ob])
+            return processed_ob
+
     def forward(self, obs, state=None, info={}):
-        logits = self.encoder(obs.observation.curr_obs.to("cuda"))
+        processed_obs = self.preprocess_fn(obs)
+        logits = self.encoder(processed_obs.to("cuda"))
         return logits, state
     
 
@@ -81,17 +91,6 @@ class DummyDist(torch.distributions.Categorical):
         action = torch.Tensor([7]).long().to("cuda")
         # print(f"Dummy action {action}")
         return action
-
-
-def preprocess_fn(batch):
-    """Preprocess observation in image format
-    """
-    transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])
-    for agent_id in batch.obs.keys():
-        ob = batch.obs.get(agent_id).observation.curr_obs
-        processed_ob = torch.stack([transform(ob_i) for ob_i in ob])
-        batch.obs[agent_id].observation.curr_obs = processed_ob
-    return batch
 
 
 class TrainRunner:
@@ -128,7 +127,7 @@ class TrainRunner:
         env = get_env(self.env_config)
         self.action_space = env._env.action_space
         self.env_agents = env.possible_agents        
-        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.training_num)])
+        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.train_num)])
         self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.test_num)])
     
     def _setup_single_agent(self, agent_id) -> PPOPolicy:
@@ -172,18 +171,22 @@ class TrainRunner:
             )
 
     def _setup_collectors(self) -> None:
+        train_buffer = VectorReplayBuffer(
+            self.args.buffer_size * self.args.train_num,
+            buffer_num=self.args.train_num,
+        )
         self.train_collector = Collector(
             self.policy,
             self.train_envs,
-            ReplayBuffer(self.args.buffer_size),
+            train_buffer,
             exploration_noise=True,
-            preprocess_fn=preprocess_fn
+            #preprocess_fn=preprocess_fn
             )
         self.test_collector = Collector(
             self.policy, 
             self.test_envs, 
             exploration_noise=True,
-            preprocess_fn=preprocess_fn
+            #preprocess_fn=preprocess_fn
             )
 
     def _get_save_path(self):
