@@ -5,29 +5,19 @@ import argparse
 import numpy as np
 from copy import deepcopy
 import torch
-from torch import nn
-from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms import (    
-    Compose, 
-    ToPILImage,
-    Grayscale, 
-    ToTensor    
-)
 
 from tianshou.data import VectorReplayBuffer
 from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
-from tianshou.utils import WandbLogger
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 
-from pettingzoo_env import parallel_env
-from tianshou_elign.data import Collector
-from tianshou_elign.env import (
-    VectorEnv,
-    BaseRewardLogger
-)
-from multi_agent_policy_manager import MultiAgentPolicyManager
+from social_rl.model.core import CNN
+from social_rl.tianshou_elign.data import Collector
+from social_rl.tianshou_elign.env import VectorEnv
+from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
+from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
+
 from default_args import DefaultGlobalArgs
 
 
@@ -37,8 +27,7 @@ def get_args():
     parser.add_argument('--config', type=str, required=True)
     # add default arguments    
     for field, default in global_config.__annotations__.items():
-        parser.add_argument(f'--{field}', default=getattr(global_config, field), type=default)
-    
+        parser.add_argument(f'--{field}', default=getattr(global_config, field), type=default)    
     args = parser.parse_known_args()[0]
     return args
 
@@ -46,51 +35,6 @@ def get_args():
 def get_env(env_config):
     # load ssd with wrapped as pettingzoo's parallel environment     
     return parallel_env(**env_config)
-
-
-class CNN(nn.Module):
-    def __init__(self, config):
-        super(CNN, self).__init__()
-        self.output_dim = config['output_dim']
-        self.encoder = nn.Sequential(
-            nn.Conv2d(config['in_channels'], config['out_channels'], config['kernel_size'], stride=config['stride']),
-            nn.ReLU(),            
-            nn.Flatten(),
-            nn.Linear(config['flatten_dim'], config['hidden_dim']),
-            nn.ReLU(),
-            nn.Linear(config['hidden_dim'], config['output_dim']),
-            nn.ReLU(),
-        )
-        self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
-        self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
-        self.preprocessing = Compose([
-            ToPILImage(),
-            Grayscale(),
-            ToTensor(),                         
-        ])
-
-    def preprocess_fn(self, obs):
-            """Preprocess observation in image format
-            """
-            transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])            
-            ob = obs.observation.curr_obs
-            processed_ob = torch.stack([transform(ob_i) for ob_i in ob])
-            return processed_ob
-
-    def forward(self, obs, state=None, info={}):
-        processed_obs = self.preprocess_fn(obs)
-        logits = self.encoder(processed_obs.to("cuda"))
-        return logits, state
-    
-
-class DummyDist(torch.distributions.Categorical):
-    def __init__(self, probs=None, logits=None, validate_args=None):
-        super().__init__(probs=probs, logits=logits, validate_args=validate_args)
-
-    def sample(self, sample_shape=torch.Size()):
-        action = torch.Tensor([7]).long().to("cuda")
-        # print(f"Dummy action {action}")
-        return action
 
 
 class TrainRunner:
@@ -142,13 +86,8 @@ class TrainRunner:
             if isinstance(m, torch.nn.Linear):
                 torch.nn.init.orthogonal_(m.weight)
                 torch.nn.init.zeros_(m.bias)
-        optim = torch.optim.Adam(actor_critic.parameters(), lr=self.args.lr)
-        # @TODO: remove this later just using this to figure out 
-        # if reward is distributed correctly per agent
-        if agent_id == 'agent-0':
-            dist = DummyDist
-        else:
-            dist = torch.distributions.Categorical        
+        optim = torch.optim.Adam(actor_critic.parameters(), lr=self.args.lr)        
+        dist = torch.distributions.Categorical
         
         policy = PPOPolicy(
             actor=actor,

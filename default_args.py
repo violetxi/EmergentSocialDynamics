@@ -7,7 +7,6 @@ class DefaultGlobalArgs:
     """
     Default global arguments for all algorithms 
     """
-    task: str = 'harvest'
     reward_threshold: float = 4500
     seed: int = 1626
     buffer_size: int = 20_000

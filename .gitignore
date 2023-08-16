@@ -172,3 +172,5 @@ result*
 exp_results
 log/
 backup/
+# vs code stuff
+.vscode/
