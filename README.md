@@ -24,7 +24,7 @@ Then add the `bin` directory to your ~/.bashrc
 echo 'export PATH=/path/to/your/home/directory/bin:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
-Install repo and dependency
+Install repo and dependency (using *venv* or *conda env* with `python=3.8`)
 ```
 pip install -e .
 ```
