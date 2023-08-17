@@ -146,7 +146,16 @@ class parallel_env(ParallelEnv):
         # env to be compatible with TianShou Buffer processes
         return obs_out, rewards_out, np.all(terminations_out), \
             np.all(truncations_out), info
-    
+
+    def get_agent_colors(self) -> Dict[str, np.ndarray]:
+        # get agent colors from the environment, used for plotting
+        agent_colors = {
+        agent_id: self._env.color_map[str(
+            int(agent_id.split('_')[1]) + 1
+            ).encode()] / 255.0
+        for agent_id in self.possible_agents
+        }
+        return agent_colors
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from typeguard import typechecked
 
-from social_rl.utils.utils import ensure_dir
+from social_rl.util.utils import ensure_dir
 
 
 
@@ -25,14 +25,12 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     # Prepare data for plotting
     plot_data = {}        
     for run in data:
-        for model, episodes in run.items():
-            # @TODO temporary fix for the bug in the data
-            if len(episodes[0]['agent_0']) > 300:
-                if model not in plot_data:
-                    plot_data[model] = {agent: [] for agent in episodes[0].keys()}
-                for episode in episodes:
-                    for agent, rewards in episode.items():
-                        plot_data[model][agent].append(np.cumsum(rewards))  # Cumulative rewards for each episode
+        for model, episodes in run.items():       
+            if model not in plot_data:
+                plot_data[model] = {agent: [] for agent in episodes[0].keys()}
+            for episode in episodes:
+                for agent, rewards in episode.items():
+                    plot_data[model][agent].append(np.cumsum(rewards))  # Cumulative rewards for each episode
     
     # Set the color palette to "Set2"
     sns.set_palette("Set2")
@@ -54,8 +52,10 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
         ax.legend()
         sns.despine()
         
-        plt.savefig(os.path.join(folder_name, f"{model}.png"))
-        plt.close()
+    fig_save_path = os.path.join(folder_name, f"{model}.png")
+    plt.savefig(fig_save_path)
+    print(f"Plot saved to {fig_save_path}")
+    plt.close()
 
 
 def plot_avg_return_with_std_error(result_path: str) -> None:
@@ -81,7 +81,7 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
         return avg_returns
 
     # Load pickle files
-    data = pickle.load(open(result_path, "rb"))    
+    data = pickle.load(open(result_path, "rb"))
     df = pd.DataFrame({
         'model': model,
         'agent': agent,
@@ -90,10 +90,8 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
         for model, agent_rewards_list in model_res.items() 
         for agent_rewards in agent_rewards_list 
         for agent, rewards in agent_rewards.items()
-        if len(rewards) > 300    # @TODO temporary fix for the bug in the data
         )
     df = df.explode('reward')
-    #breakpoint()
     # Set the color palette to "Set2"
     sns.set_palette("Set2")
     # Remove grid lines and plot the bar plot grouped by agent_id with standard error
@@ -108,12 +106,14 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
     # Save the plot
     folder_name = os.path.dirname(result_path)
     filename = os.path.basename(result_path).split('.')[0]
-    plt.savefig(os.path.join(folder_name, f"{filename}.png"))
+    fig_save_path = os.path.join(folder_name, f"{filename}.png")
+    plt.savefig(fig_save_path)
+    print(f"Plot saved to {fig_save_path}")
     plt.close()
 
 
 if __name__ == '__main__':
-    spread_result_path = "results/mpe-simple_spread_v3.pkl"
-    plot_avg_cumulative_rewards(spread_result_path)
-    plot_avg_return_with_std_error(spread_result_path)
-    
+    cleanup_result_path = "log/cleanup.pkl"
+    plot_avg_cumulative_rewards(cleanup_result_path)
+    plot_avg_return_with_std_error(cleanup_result_path)
+        

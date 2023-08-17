@@ -215,6 +215,7 @@ class Collector(object):
         n_episode: Optional[int] = None,
         random: bool = False,
         render: Optional[float] = None,
+        render_mode: Optional[str] =None,
         no_grad: bool = True,
         gym_reset_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
@@ -251,6 +252,9 @@ class Collector(object):
             * ``len`` mean of episodic lengths.
             * ``rew_std`` standard error of episodic rewards.
             * ``len_std`` standard error of episodic lengths.
+            * ``frames`` step-wise frames over collected episodes.
+            * ``agent_step_rewards`` step-wise individual agent's reward over 
+                    collected episodes.
         """        
         if n_step is not None:
             assert n_episode is None, (
@@ -281,12 +285,14 @@ class Collector(object):
         episode_rews = []
         episode_lens = []
         episode_start_indices = []
+        # track extra information for analysis
+        frames = []
+        step_agent_rews = []
 
         while True:
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
             last_state = self.data.policy.pop("hidden_state", None)
-
             # get the next action
             if random:
                 try:
@@ -310,13 +316,13 @@ class Collector(object):
                 state = result.get("state", None)
                 if state is not None:
                     policy.hidden_state = state  # save state into buffer
-                # update action for multi-agent into self.data                
-                act = [[]for _ in range(self.env_num)]
-                for i, (k, v) in enumerate(result.items()):
-                    for j, action in enumerate(to_numpy(v.act)):
-                        act[j].append(action) 
-                act = np.stack(act, axis=0)                                
-                #act = to_numpy(result.act)        
+                # update action for multi-agent into self.data 
+                
+                act = []
+                for k, v in result.items():
+                    act.append(v.act)
+                act = np.stack(to_numpy(act), axis=0)    # (n_agent, env_eps)
+                act = np.swapaxes(act, 1, 0)    # (n_env, env_eps)
                 if self.exploration_noise:
                     act = self.policy.exploration_noise(act, self.data)                
                 self.data.update(policy=policy, act=act)
@@ -324,11 +330,21 @@ class Collector(object):
             # get bounded and remapped actions first (not saved into buffer)
             # only processed if self.action_scaling it True
             action_remap = self.policy.map_action(self.data.act)
-            # step in env
+            # step in env, output shape: (num_ep, num_agents)
             obs_next, rew, terminated, truncated, info = self.env.step(
                 action_remap,  # type: ignore
                 ready_env_ids
-            )            
+            )
+            # organize step_agent_rews as (num_episode, n_ep_steps, rew_shape)                
+            if len(rew) == 1:
+                step_agent_rews.append(deepcopy(rew))
+            else:
+                if len(step_agent_rews) == 0:
+                    for r in rew:
+                        step_agent_rews.append([deepcopy(r)])
+                else:
+                    for i, r in enumerate(rew):
+                        step_agent_rews[i].append(deepcopy(r))      
             done = np.logical_or(terminated, truncated)            
 
             self.data.update(
@@ -352,8 +368,20 @@ class Collector(object):
                     )
                 )
 
-            if render:
-                self.env.render()
+            if render_mode == "rgb_array":
+                # organize frames as (num_episode, n_ep_steps, frames_shape)
+                frame = self.env.render()
+                if len(frame) == 1:
+                    frames.append(frame)
+                else:
+                    if len(frames) == 0:
+                        for f in frame:
+                            frames.append([f])
+                    else:
+                        for i, f in enumerate(frame):
+                            frames[i].append(f)
+
+            if render:                                
                 if render > 0 and not np.isclose(render, 0):
                     time.sleep(render)
 
@@ -361,7 +389,6 @@ class Collector(object):
             ptr, ep_rew, ep_len, ep_idx = self.buffer.add(
                 self.data, buffer_ids=ready_env_ids
             )
-
             # collect statistics
             step_count += len(ready_env_ids)
 
@@ -428,7 +455,7 @@ class Collector(object):
             rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
             rew_mean = rew_std = len_mean = len_std = 0
 
-        return {
+        output = {
             "n/ep": episode_count,
             "n/st": step_count,
             "rews": rews,
@@ -438,7 +465,12 @@ class Collector(object):
             "len": len_mean,
             "rew_std": rew_std,
             "len_std": len_std,
+            "step_agent_rews": step_agent_rews
         }
+        # store rendered frames
+        if render_mode == "rgb_array":
+            output["frames"] = frames
+        return output
 
 
 class AsyncCollector(Collector):
@@ -543,7 +575,7 @@ class AsyncCollector(Collector):
             self.data = self.data[ready_env_ids]
             assert len(whole_data) == self.env_num  # major difference
             # restore the state: if the last state is None, it won't store
-            last_state = self.data.policy.pop("hidden_state", None)
+            last_state = self.data.policy.pop("hidden_state", None)            
 
             # get the next action
             if random:

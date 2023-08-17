@@ -1,11 +1,15 @@
 import os
+import cv2
 import yaml
+import pickle
 import datetime
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 from copy import deepcopy
-import torch
+from typing import List, Dict, Union, Optional
 
+import torch
 from tianshou.data import VectorReplayBuffer
 from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
@@ -17,6 +21,7 @@ from social_rl.tianshou_elign.data import Collector
 from social_rl.tianshou_elign.env import VectorEnv
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
 from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
+from social_rl.util.utils import ensure_dir
 
 from default_args import DefaultGlobalArgs
 
@@ -43,6 +48,8 @@ class TrainRunner:
             args: argparse.Namespace
             ) -> None:
         self.args = args
+        self.train_step_agent_rews = None
+        self.eval_step_agent_rews = None
         self._load_config()
         self._setup_env()
         self.set_seed()
@@ -69,10 +76,14 @@ class TrainRunner:
     def _setup_env(self) -> None:        
         # this is just a dummpy for setting up other things later
         env = get_env(self.env_config)
+        self.agent_ids = env.possible_agents
         self.action_space = env._env.action_space
-        self.env_agents = env.possible_agents        
-        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.train_num)])
-        self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.test_num)])
+        # these will be used for evaluation and plotting
+        self.env_agents = env.possible_agents
+        self.agent_colors = env.get_agent_colors()
+        # trainer will use this to collect data
+        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.train_env_num)])
+        self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.test_env_num)])        
     
     def _setup_single_agent(self, agent_id) -> PPOPolicy:
         net = CNN(self.net_config)
@@ -111,21 +122,19 @@ class TrainRunner:
 
     def _setup_collectors(self) -> None:
         train_buffer = VectorReplayBuffer(
-            self.args.buffer_size * self.args.train_num,
-            buffer_num=self.args.train_num,
-        )
+            self.args.buffer_size * self.args.train_env_num,
+            buffer_num=self.args.train_env_num,
+        )        
         self.train_collector = Collector(
             self.policy,
             self.train_envs,
             train_buffer,
             exploration_noise=True,
-            #preprocess_fn=preprocess_fn
             )
         self.test_collector = Collector(
             self.policy, 
             self.test_envs, 
             exploration_noise=True,
-            #preprocess_fn=preprocess_fn
             )
 
     def _get_save_path(self):
@@ -154,11 +163,10 @@ class TrainRunner:
         return mean_rewards >= args.reward_threshold
 
     def reward_metric(self, rews):
-        # rews: (n_ep, n_agent)        
+        # rews: (n_ep, n_agent)
         return rews
     
-
-    def run(self) -> None:
+    def train(self) -> None:
         args = self.args
         log_name = self._get_save_path()
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -176,7 +184,7 @@ class TrainRunner:
             args.epoch,
             args.step_per_epoch,
             args.repeat_per_collect,
-            args.test_num,
+            args.test_env_num,    # number of episodes tested during training
             args.batch_size,
             save_best_fn=self.save_best_fn,
             reward_metric=self.reward_metric,    # used in Collector
@@ -184,10 +192,138 @@ class TrainRunner:
             stop_fn=self.stop_fn,
             #logger=logger
             )
+        # save training result
+        train_result_save_path = os.path.join(self.log_path, 'train_result.pkl')
+        with open(train_result_save_path, 'wb') as f:
+            pickle.dump(train_result, f)        
+        print(f"\n========== Test Result during training==========\n{train_result}")
+
+    def eval(self) -> None:
+        args = self.args
         # run testing
         self.policy.eval()
-        eval_result = self.test_collector.collect(n_episode=2)            
-        print(f"\n========== Test Result==========\n{eval_result}")     
+        eval_result = self.test_collector.collect(
+            n_episode=args.eval_eps,
+            render_mode='rgb_array'
+            )
+        step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
+        frames = eval_result.pop('frames')
+        self.save_results(step_agent_reward, frames)
+        #print(f"\n========== Eval after training ==========\n{eval_result}")
+
+    def _convert_save_data(
+            self, 
+            data: np.ndarray
+            ) -> List[Dict[str, np.ndarray]]:
+        """Convert data from np.ndarray (n_episode, n_step, n_agent) to 
+        [{agent_id: [ep1_rew, ...]}, {agent_id: [ep2_rew, ...]}, ...]        
+        """
+        output = []
+        for i in range(data.shape[0]):
+            output.append({
+                agent_id: data[i, :, j] 
+                for j, agent_id in enumerate(self.env_agents)
+                })
+        return output
+
+    def save_results(
+            self, 
+            data: np.ndarray,
+            episode_frames: Optional[List[List[np.ndarray]]] = None
+            ) -> None:        
+        args = self.args
+        ensure_dir(args.logdir)
+        task_name = self.log_path.split('/')[1].split('_')[0]
+        # use config to identify model types
+        if args.ckpt_dir is not None:
+            model_name = args.ckpt_dir.split('/')[-1]
+        else:
+            model_name = os.path.basename(args.config).split('.')[0]        
+        # save eval step-wise agent reward data, in case of reruns with duplicated 
+        # model and hypere-parameter settings, replace the data
+        result_path = os.path.join(args.logdir, f"{task_name}.pkl")
+        data = self._convert_save_data(data)
+        if os.path.exists(result_path):
+            print(f"{result_path} alreadying exist, appending data..")
+            with open(result_path, 'rb') as f:
+                existing_data = pickle.load(f)
+                existing_models = [k for data in existing_data for k in data.keys()]
+                model_idx = existing_models.index(model_name) \
+                    if model_name in existing_models else None
+                # if same model&hyperparam is tested in the past, replace
+                if model_idx is not None:
+                    print("Model already exist, replacing..")
+                    existing_data[model_idx] = {model_name: data}
+                else:
+                    print("Model not exist, appending..")
+                    existing_data.append({model_name: data})
+        else:
+            existing_data = [{model_name: data}]
+        with open(result_path, 'wb') as f:
+            pickle.dump(existing_data, f)
+        print(f"data saved to {result_path}..")
+        # create videos
+        video_folder = os.path.join(self.log_path, "videos", model_name)
+        ensure_dir(video_folder)
+        for i, run_frames in enumerate(episode_frames):
+            video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            
+            self.save_video(run_frames, data[i], video_path)
+
+    # write a function to save list of frames to video
+    def save_video(
+            self, 
+            frames: List[np.ndarray], 
+            rewards: Dict[str, List],
+            filename: str
+            ) -> None:
+        """Save frames to video
+        Args:
+            frames: list of frames
+            filename: filename to save video to
+        """
+        print(f"Saving video to {filename}..")
+        #height, width, layers = frames[0].shape
+        height = 500
+        width = 300
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video = cv2.VideoWriter(filename, fourcc, 10, (width*2, height))
+        max_steps = len(frames)
+        for i, frame in enumerate(frames): 
+            reward_img = self.render_reward_curve(rewards, i, max_steps)
+            reward_img = cv2.resize(reward_img, (width, height), interpolation=cv2.INTER_AREA)
+            reward_img.astype('uint8')
+            frame = frame.astype('uint8')
+            frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+            combined_frame = cv2.hconcat([frame, reward_img])
+            video.write(combined_frame)
+        cv2.destroyAllWindows()
+        video.release()
+
+    def render_reward_curve(self, rewards_dict, cur_steps, max_steps):        
+        """Render reward curve as an image"""
+        fig, ax = plt.subplots()
+        for agent_id, rewards in rewards_dict.items():
+            ax.plot(
+                rewards[:cur_steps], 
+                label=f"Agent {agent_id}", 
+                color=self.agent_colors[agent_id],
+                alpha=0.5)
+
+        ax.set_title("Reward at Each Step for Each Agent")
+        ax.set_xlabel("Steps")
+        ax.set_ylabel("Reward")
+        ax.set_xlim([0, max_steps])  # Set x-axis limits
+        ax.legend()  # Add a legend
+
+        fig.canvas.draw()
+        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        plt.close(fig)
+        return image
+
+    def run(self) -> None:
+        self.train()
+        self.eval()        
 
 
 if __name__ == "__main__":
