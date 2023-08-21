@@ -167,7 +167,7 @@ class Collector(object):
         """Reset the data buffer."""
         self.buffer.reset(keep_statistics=keep_statistics)
 
-    def reset_env(self, gym_reset_kwargs: Optional[Dict[str, Any]] = None) -> None:
+    def reset_env(self, gym_reset_kwargs: Optional[Dict[str, Any]] = None) -> None:        
         """Reset all of the environments."""
         gym_reset_kwargs = gym_reset_kwargs if gym_reset_kwargs else {}
         obs, info = self.env.reset(**gym_reset_kwargs)        
@@ -178,7 +178,7 @@ class Collector(object):
             obs = processed_data.get("obs", obs)
             info = processed_data.get("info", info)
         self.data.info = info
-        self.data.obs = obs
+        self.data.obs = obs     # (env_num,)
 
     def _reset_state(self, id: Union[int, List[int]]) -> None:
         """Reset the hidden state: self.data.state[id]."""
@@ -271,7 +271,11 @@ class Collector(object):
         elif n_episode is not None:
             assert n_episode > 0
             ready_env_ids = np.arange(min(self.env_num, n_episode))
-            self.data = self.data[:min(self.env_num, n_episode)]
+            # this does not work 
+            #self.data = self.data[:min(self.env_num, n_episode)]
+            # at initial reset, only self.data.obs has data, therefore we need to slice this 
+            # to ensure there's no dimension mismatch error
+            self.data.obs = self.data.obs[:min(self.env_num, n_episode)]            
         else:
             raise TypeError(
                 "Please specify at least one (either n_step or n_episode) "
@@ -287,9 +291,9 @@ class Collector(object):
         episode_start_indices = []
         # track extra information for analysis
         frames = []
-        step_agent_rews = []
+        step_agent_rews = [[] for _ in range(n_episode)]
 
-        while True:
+        while True:        
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
             last_state = self.data.policy.pop("hidden_state", None)
@@ -331,11 +335,15 @@ class Collector(object):
             # only processed if self.action_scaling it True
             action_remap = self.policy.map_action(self.data.act)
             # step in env, output shape: (num_ep, num_agents)
+
             obs_next, rew, terminated, truncated, info = self.env.step(
                 action_remap,  # type: ignore
                 ready_env_ids
-            )
+            )            
             # organize step_agent_rews as (num_episode, n_ep_steps, rew_shape)                
+            # if n_episode == 3:
+            #     breakpoint()
+            
             if len(rew) == 1:
                 step_agent_rews.append(deepcopy(rew))
             else:
@@ -344,8 +352,9 @@ class Collector(object):
                         step_agent_rews.append([deepcopy(r)])
                 else:
                     for i, r in enumerate(rew):
-                        step_agent_rews[i].append(deepcopy(r))      
-            done = np.logical_or(terminated, truncated)            
+                        step_agent_rews[i].append(deepcopy(r))
+            
+            done = np.logical_or(terminated, truncated)
 
             self.data.update(
                 obs_next=obs_next,
@@ -384,17 +393,16 @@ class Collector(object):
             if render:                                
                 if render > 0 and not np.isclose(render, 0):
                     time.sleep(render)
-
+            
             # add data into the buffer
             ptr, ep_rew, ep_len, ep_idx = self.buffer.add(
                 self.data, buffer_ids=ready_env_ids
             )
             # collect statistics
-            step_count += len(ready_env_ids)
-
-            if np.any(done):
+            step_count += len(ready_env_ids)             
+            if np.any(done):                
                 env_ind_local = np.where(done)[0]
-                env_ind_global = ready_env_ids[env_ind_local]
+                env_ind_global = ready_env_ids[env_ind_local]                             
                 episode_count += len(env_ind_local)
                 episode_lens.append(ep_len[env_ind_local])
                 episode_rews.append(ep_rew[env_ind_local])
@@ -410,10 +418,13 @@ class Collector(object):
                 # remove surplus env id from ready_env_ids
                 # to avoid bias in selecting environments
                 if n_episode:
-                    surplus_env_num = len(ready_env_ids) - (n_episode - episode_count)
+                    surplus_env_num = len(ready_env_ids) - (n_episode - episode_count)                    
                     if surplus_env_num > 0:
                         mask = np.ones_like(ready_env_ids, dtype=bool)
-                        mask[env_ind_local[:surplus_env_num]] = False
+                        #mask[env_ind_local[:surplus_env_num]] = False
+                        # surplus starts at the end of the list because index for action 
+                        # is the same as the env_id
+                        mask[env_ind_local[-surplus_env_num:]] = False
                         ready_env_ids = ready_env_ids[mask]
                         self.data = self.data[mask]
 

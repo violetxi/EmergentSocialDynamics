@@ -117,11 +117,10 @@ class parallel_env(ParallelEnv):
             - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
             - info
         dicts where each dict looks like {agent_1: item_1, agent_2: item_2}
-        """
+        """        
         self.steps += 1
         actions = dict(zip(self.possible_agents, actions))
-        obs, rewards, terminations, info = self._env.step(actions)                
-        
+        obs, rewards, terminations, info = self._env.step(actions)                        
         obs_out = {}
         rewards_out = []
         terminations_out = []
@@ -141,7 +140,7 @@ class parallel_env(ParallelEnv):
             rewards_out.append(rewards[agent_id])
             terminations_out.append(terminations[agent_id]) 
             truncations_out.append(False) # no truncation in SSD
-            info[agent_id] = {}
+            info[agent_id] = {}        
         # terminations and truncations are the same for all agents, keep one per
         # env to be compatible with TianShou Buffer processes
         return obs_out, rewards_out, np.all(terminations_out), \

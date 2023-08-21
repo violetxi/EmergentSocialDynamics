@@ -1,5 +1,6 @@
 import os
 import cv2
+import glob
 import yaml
 import pickle
 import datetime
@@ -10,11 +11,17 @@ from copy import deepcopy
 from typing import List, Dict, Union, Optional
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
+# to supress tensorboard pkg_resources deprecated warnings
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="gym")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorboard")
 from tianshou.data import VectorReplayBuffer
 from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.utils.logger.wandb import WandbLogger
 
 from social_rl.model.core import CNN
 from social_rl.tianshou_elign.data import Collector
@@ -55,6 +62,9 @@ class TrainRunner:
         self.set_seed()
         self._setup_agents()
         self._setup_collectors()
+        self.log_name = self._get_save_path()
+        self.log_path = os.path.join(args.logdir, self.log_name)        
+        os.makedirs(self.log_path, exist_ok=True)
 
     def set_seed(self) -> None:
         # @TODO: allow automatically generating seeds for N test and M train envs
@@ -69,6 +79,7 @@ class TrainRunner:
     def _load_config(self) -> None:
         with open(self.args.config, 'r') as stream:
             configs = yaml.safe_load(stream)
+        self.config = configs
         self.env_config = configs['Environment']        
         self.net_config = configs['Net']
         self.policy_config = configs['PPOPolicy']
@@ -147,12 +158,14 @@ class TrainRunner:
                 args_diffs.insert(
                     0, f'{v.split("/")[-1].split(".")[0]}'
                     )
+            elif k in ['ckpt_dir', 'eval_only']:
+                pass
             else:
                 if v != default_args[k]:
                     args_diffs.append(f'{k}_{curr_args[k]}')
         return '-'.join(args_diffs)
 
-    """ Defining call back functions """
+    """ Defining call back functions for onpolicy_trainer """
     def save_best_fn(self, policy):
         for agent_id in self.env_agents:
             model_save_path = os.path.join(
@@ -168,27 +181,32 @@ class TrainRunner:
     
     def train(self) -> None:
         args = self.args
-        log_name = self._get_save_path()
+        # logger setup     
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        wandb_run_name = f"{log_name}-{cur_time}"
-        # log        
-        self.log_path = os.path.join(args.logdir, log_name)
-        os.makedirs(self.log_path, exist_ok=True)        
-        # logger = WandbLogger(name=wandb_run_name)
-        # logger.load(SummaryWriter(self.log_path))
+        wandb_run_name = f"{self.log_name}-{cur_time}"        
+        # logger = WandbLogger(
+        #     save_interval=args.save_interval,
+        #     project=args.project_name,
+        #     name=wandb_run_name,
+        #     config=self.config,
+        #     )
+        # writer = SummaryWriter(self.log_path)
+        # writer.add_text("args", str(args))
+        # logger.load(writer)        
         # run trainer
         train_result = onpolicy_trainer(
-            self.policy,
-            self.train_collector,
-            self.test_collector,
-            args.epoch,
-            args.step_per_epoch,
-            args.repeat_per_collect,
-            args.test_env_num,    # number of episodes tested during training
-            args.batch_size,
-            save_best_fn=self.save_best_fn,
-            reward_metric=self.reward_metric,    # used in Collector
+            policy=self.policy,
+            train_collector=self.train_collector,
+            test_collector=self.test_collector,
+            max_epoch=args.epoch,
+            step_per_epoch=args.step_per_epoch,
+            repeat_per_collect=args.repeat_per_collect,
+            episode_per_test=args.test_env_num,   # number of episodes tested during training
+            batch_size=args.batch_size,            
             step_per_collect=args.step_per_collect,
+            episode_per_collect=args.episode_per_collect,
+            save_best_fn=self.save_best_fn,
+            reward_metric=self.reward_metric,    # used in Collector                        
             stop_fn=self.stop_fn,
             #logger=logger
             )
@@ -200,13 +218,21 @@ class TrainRunner:
 
     def eval(self) -> None:
         args = self.args
+        if args.eval_only:
+            ckpts = glob.glob(f'{args.ckpt_dir}/*.pth')
+            agent_ckpts = {ckpt.split('-')[-1].split('.')[0]: ckpt for ckpt in ckpts}            
+            for agent_id, agent_policy in self.policy.policies.items():
+                agent_policy.load_state_dict(torch.load(agent_ckpts[agent_id]))
         # run testing
         self.policy.eval()
+        print(f"\n========== Eval after training ==========")        
         eval_result = self.test_collector.collect(
             n_episode=args.eval_eps,
             render_mode='rgb_array'
             )
-        step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
+        #step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
+        step_agent_reward = eval_result.pop('step_agent_rews')
+        breakpoint()
         frames = eval_result.pop('frames')
         self.save_results(step_agent_reward, frames)
         #print(f"\n========== Eval after training ==========\n{eval_result}")
@@ -233,12 +259,12 @@ class TrainRunner:
             ) -> None:        
         args = self.args
         ensure_dir(args.logdir)
-        task_name = self.log_path.split('/')[1].split('_')[0]
+        task_name = self.log_path.split('/')[1].split('_')[0]        
         # use config to identify model types
-        if args.ckpt_dir is not None:
-            model_name = args.ckpt_dir.split('/')[-1]
-        else:
-            model_name = os.path.basename(args.config).split('.')[0]        
+        # if args.ckpt_dir is not None:
+        #     model_name = args.ckpt_dir.split('/')[-1]
+        # else:
+        model_name = os.path.basename(args.config).split('.')[0]        
         # save eval step-wise agent reward data, in case of reruns with duplicated 
         # model and hypere-parameter settings, replace the data
         result_path = os.path.join(args.logdir, f"{task_name}.pkl")
@@ -286,7 +312,7 @@ class TrainRunner:
         height = 500
         width = 300
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        video = cv2.VideoWriter(filename, fourcc, 10, (width*2, height))
+        video = cv2.VideoWriter(filename, fourcc, 30, (width*2, height))
         max_steps = len(frames)
         for i, frame in enumerate(frames): 
             reward_img = self.render_reward_curve(rewards, i, max_steps)
@@ -322,8 +348,13 @@ class TrainRunner:
         return image
 
     def run(self) -> None:
-        self.train()
-        self.eval()        
+        if not self.args.eval_only:
+            self.train()                
+            self.eval()
+        else:
+            assert self.args.ckpt_dir is not None, \
+                "ckpt_dir must be specified for eval_only"
+            self.eval()
 
 
 if __name__ == "__main__":
