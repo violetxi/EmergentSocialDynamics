@@ -21,14 +21,14 @@ from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
-from tianshou.utils.logger.wandb import WandbLogger
 
 from social_rl.model.core import CNN
 from social_rl.tianshou_elign.data import Collector
 from social_rl.tianshou_elign.env import VectorEnv
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
 from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
-from social_rl.util.utils import ensure_dir
+from social_rl.utils.loggers.wandb_logger import WandbLogger
+from social_rl.utils.utils import ensure_dir
 
 from default_args import DefaultGlobalArgs
 
@@ -184,15 +184,16 @@ class TrainRunner:
         # logger setup     
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         wandb_run_name = f"{self.log_name}-{cur_time}"        
-        # logger = WandbLogger(
-        #     save_interval=args.save_interval,
-        #     project=args.project_name,
-        #     name=wandb_run_name,
-        #     config=self.config,
-        #     )
-        # writer = SummaryWriter(self.log_path)
-        # writer.add_text("args", str(args))
-        # logger.load(writer)        
+        logger = WandbLogger(
+            update_interval=args.update_interval,
+            save_interval=args.save_interval,
+            project=args.project_name,
+            name=wandb_run_name,
+            config=self.config,
+            )
+        writer = SummaryWriter(self.log_path)
+        writer.add_text("args", str(args))
+        logger.load(writer)
         # run trainer
         train_result = onpolicy_trainer(
             policy=self.policy,
@@ -201,14 +202,14 @@ class TrainRunner:
             max_epoch=args.epoch,
             step_per_epoch=args.step_per_epoch,
             repeat_per_collect=args.repeat_per_collect,
-            episode_per_test=args.test_env_num,   # number of episodes tested during training
+            episode_per_test=args.test_eps,   # number of episodes tested during training
             batch_size=args.batch_size,            
             step_per_collect=args.step_per_collect,
             episode_per_collect=args.episode_per_collect,
             save_best_fn=self.save_best_fn,
             reward_metric=self.reward_metric,    # used in Collector                        
             stop_fn=self.stop_fn,
-            #logger=logger
+            logger=logger
             )
         # save training result
         train_result_save_path = os.path.join(self.log_path, 'train_result.pkl')
@@ -233,7 +234,7 @@ class TrainRunner:
         step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
         frames = eval_result.pop('frames')
         self.save_results(step_agent_reward, frames)
-        #print(f"\n========== Eval after training ==========\n{eval_result}")
+        print(f"\n========== Eval after training ==========\n{eval_result}")
 
     def _convert_save_data(
             self, 
@@ -258,10 +259,6 @@ class TrainRunner:
         args = self.args
         ensure_dir(args.logdir)
         task_name = self.log_path.split('/')[1].split('_')[0]        
-        # use config to identify model types
-        # if args.ckpt_dir is not None:
-        #     model_name = args.ckpt_dir.split('/')[-1]
-        # else:
         model_name = os.path.basename(args.config).split('.')[0]        
         # save eval step-wise agent reward data, in case of reruns with duplicated 
         # model and hypere-parameter settings, replace the data

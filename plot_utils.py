@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from typeguard import typechecked
 
-from social_rl.util.utils import ensure_dir
+from social_rl.utils.utils import ensure_dir
 
 
 

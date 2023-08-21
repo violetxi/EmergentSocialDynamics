@@ -12,17 +12,17 @@ class DefaultGlobalArgs:
     buffer_size: int = 20_000
     lr: float = 1e-4
     gamma: float = 0.99    # discount factor
-    epoch: int = 1   #1000
-    step_per_epoch: int = 5 #5000
-    # number of steps per collect, in collector steps in env is actually
+    epoch: int = 1000
+    step_per_epoch: int = 5000    # number of train steps per epoch    
     # divided by number of envs in the vectorized environment
-    step_per_collect: int = 2000    
+    step_per_collect: int = 2000   # number of transitions collected for all train envs
     episode_per_collect: int = None   # None means use step_per_collect, vice versa    
-    repeat_per_collect: int = 10
+    repeat_per_collect: int = 10    # number of policy learning per collect
     batch_size: int = 2048
     # number of train and test envs in the vectorized environment
     train_env_num: int = 10
     test_env_num: int = 2
+    test_eps: int = 2
     # number of episode used to evaluate trained agents after training is finished
     eval_eps: int = 4    # must be multiply of test_env_num
     logdir: str = 'log'
@@ -32,6 +32,7 @@ class DefaultGlobalArgs:
     resume_training: bool = False
     eval_only: bool = False
     # wandb logging
+    update_interval: int = 1    # number of gradient steps for logging loss
     save_interval: int = 1
     project_name: str = 'emergent-social-dynamics'
     
