@@ -16,16 +16,15 @@ class DefaultGlobalArgs:
     step_per_epoch: int = 5 #5000
     # number of steps per collect, in collector steps in env is actually
     # divided by number of envs in the vectorized environment
-    #step_per_collect: int = 2000
-    step_per_collect: int = None
-    episode_per_collect: int = 1
+    step_per_collect: int = 2000    
+    episode_per_collect: int = None   # None means use step_per_collect, vice versa    
     repeat_per_collect: int = 10
     batch_size: int = 2048
     # number of train and test envs in the vectorized environment
     train_env_num: int = 10
     test_env_num: int = 2
     # number of episode used to evaluate trained agents after training is finished
-    eval_eps: int = 3
+    eval_eps: int = 4    # must be multiply of test_env_num
     logdir: str = 'log'
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
     # ckpt_dir can be provided when continue to train or only doing evaluation

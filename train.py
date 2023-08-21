@@ -230,9 +230,7 @@ class TrainRunner:
             n_episode=args.eval_eps,
             render_mode='rgb_array'
             )
-        #step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
-        step_agent_reward = eval_result.pop('step_agent_rews')
-        breakpoint()
+        step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
         frames = eval_result.pop('frames')
         self.save_results(step_agent_reward, frames)
         #print(f"\n========== Eval after training ==========\n{eval_result}")
@@ -289,7 +287,7 @@ class TrainRunner:
             pickle.dump(existing_data, f)
         print(f"data saved to {result_path}..")
         # create videos
-        video_folder = os.path.join(self.log_path, "videos", model_name)
+        video_folder = os.path.join("videos", model_name)
         ensure_dir(video_folder)
         for i, run_frames in enumerate(episode_frames):
             video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            

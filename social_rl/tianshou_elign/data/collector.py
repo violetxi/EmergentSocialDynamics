@@ -269,7 +269,11 @@ class Collector(object):
                 )
             ready_env_ids = np.arange(self.env_num)
         elif n_episode is not None:
-            assert n_episode > 0
+            assert n_episode > 0, \
+                f"n_episode={n_episode} must be positive."
+            # assert this to make tracking step-wise agent rewards and frames easier
+            assert n_episode % self.env_num == 0 or self.env_num % n_episode == 0,\
+                f"n_episode={n_episode} must be a multiple of #env ({self.env_num})."
             ready_env_ids = np.arange(min(self.env_num, n_episode))
             # this does not work 
             #self.data = self.data[:min(self.env_num, n_episode)]
@@ -290,10 +294,16 @@ class Collector(object):
         episode_lens = []
         episode_start_indices = []
         # track extra information for analysis
-        frames = []
-        step_agent_rews = [[] for _ in range(n_episode)]
+        if n_episode is not None:
+            frames = [[] for _ in range(n_episode)]
+            step_agent_rews = [[] for _ in range(n_episode)]
+            step_agent_intr_rews = [[] for _ in range(n_episode)]
+        else:
+            frames = [[] for _ in range(self.env_num)]
+            step_agent_rews = [[] for _ in range(self.env_num)]
+            step_agent_intr_rews = [[] for _ in range(self.env_num)]
 
-        while True:        
+        while True:
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
             last_state = self.data.policy.pop("hidden_state", None)
@@ -335,24 +345,17 @@ class Collector(object):
             # only processed if self.action_scaling it True
             action_remap = self.policy.map_action(self.data.act)
             # step in env, output shape: (num_ep, num_agents)
-
             obs_next, rew, terminated, truncated, info = self.env.step(
                 action_remap,  # type: ignore
                 ready_env_ids
-            )            
-            # organize step_agent_rews as (num_episode, n_ep_steps, rew_shape)                
-            # if n_episode == 3:
-            #     breakpoint()
-            
-            if len(rew) == 1:
-                step_agent_rews.append(deepcopy(rew))
-            else:
-                if len(step_agent_rews) == 0:
-                    for r in rew:
-                        step_agent_rews.append([deepcopy(r)])
+            )
+            # organize step_agent_rews as (num_episode, n_ep_steps, rew_shape)                       
+            for i, r in enumerate(rew):
+                if n_episode is not None:
+                    idx = i + episode_count
                 else:
-                    for i, r in enumerate(rew):
-                        step_agent_rews[i].append(deepcopy(r))
+                    idx = i
+                step_agent_rews[idx].append(deepcopy(r))
             
             done = np.logical_or(terminated, truncated)
 
@@ -379,16 +382,13 @@ class Collector(object):
 
             if render_mode == "rgb_array":
                 # organize frames as (num_episode, n_ep_steps, frames_shape)
-                frame = self.env.render()
-                if len(frame) == 1:
-                    frames.append(frame)
-                else:
-                    if len(frames) == 0:
-                        for f in frame:
-                            frames.append([f])
+                frame = self.env.render()               
+                for i, f in enumerate(frame):
+                    if n_episode is not None:
+                        idx = i + episode_count
                     else:
-                        for i, f in enumerate(frame):
-                            frames[i].append(f)
+                        idx = i
+                    frames[idx].append(f)
 
             if render:                                
                 if render > 0 and not np.isclose(render, 0):
