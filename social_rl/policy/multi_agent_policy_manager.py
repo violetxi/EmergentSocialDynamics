@@ -19,7 +19,8 @@ class MultiAgentPolicyManager(BasePolicy):
     """
 
     def __init__(
-        self, policies: List[BasePolicy], 
+        self, 
+        policies: List[BasePolicy], 
         env_agents: List[str],
         action_space: gym.spaces.Space,         
         **kwargs: Any

@@ -9,7 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from typing import List, Dict, Union, Optional
-from importlib import import_module
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -22,8 +21,10 @@ from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.policy import ICMPolicy
+from tianshou.utils.net.discrete import IntrinsicCuriosityModule
 
-from social_rl.model.core import CNN
+from social_rl.model.core import CNN, CNNICM
 from social_rl.tianshou_elign.data import Collector
 from social_rl.tianshou_elign.env import VectorEnv
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
@@ -84,12 +85,6 @@ class TrainRunner:
         self.env_config = configs['Environment']        
         self.net_config = configs['Net']
         self.policy_config = configs['PPOPolicy']
-        if 'IMPolicy' in configs:
-            self.impolicy_config = configs['IMPolicy']
-            self.model_based = True
-        else:
-            self.model_based = False        
-
 
     def _setup_env(self) -> None:        
         # this is just a dummpy for setting up other things later
@@ -116,45 +111,34 @@ class TrainRunner:
                 torch.nn.init.orthogonal_(m.weight)
                 torch.nn.init.zeros_(m.bias)
         optim = torch.optim.Adam(actor_critic.parameters(), lr=self.args.lr)        
-        dist = torch.distributions.Categorical        
-        if self.model_based:
-            ppo = PPOPolicy(
-                actor=actor,
-                critic=critic,
-                optim=optim,
-                dist_fn=dist,
-                discount_factor=self.args.gamma,
-                **self.policy_config
-            )            
-            feature_net_module = import_module(
-                self.impolicy_config['world_model']['args']['feature_net']['module_path']
-                )
-            feature_net_config = self.impolicy_config['world_model']['args']['feature_net']['config']
-            feature_net = feature_net_module(feature_net_config)
-            wm_module = import_module(
-                self.impolicy_config['world_model']['module_path']
-                )
-            im_model = wm_module(
-                feature_net=feature_net,
-                **self.impolicy_config['world_model']['kwargs']
-                )
-            im_wm_optim = torch.optim.Adam(im_model.parameters(), lr=self.args.lr)
-            policy = import_module(
-                policy=ppo,
-                model=im_model,
-                optim=im_wm_optim,
-                **self.impolicy_config['args']
-                )            
-        else:
-            policy = PPOPolicy(
-                actor=actor,
-                critic=critic,
-                optim=optim,
-                dist_fn=dist,
-                discount_factor=self.args.gamma,
-                **self.policy_config
+        dist = torch.distributions.Categorical
+        
+        ppo = PPOPolicy(
+            actor=actor,
+            critic=critic,
+            optim=optim,
+            dist_fn=dist,
+            discount_factor=self.args.gamma,
+            **self.policy_config
+        )
+        # IM
+        feature_net = CNNICM(self.net_config)
+        im_model = IntrinsicCuriosityModule(
+            feature_net=feature_net,
+            feature_dim=self.net_config['output_dim'],
+            action_dim=action_shape,
+            hidden_sizes=(self.net_config['hidden_dim'], self.net_config['hidden_dim'])
+        )
+        im_model = im_model.to(device)
+        wm_optim = torch.optim.Adam(im_model.parameters(), lr=self.args.lr)
+        policy = ICMPolicy(
+            policy=ppo, 
+            model=im_model,           
+            optim=wm_optim,
+            lr_scale=1.0,
+            reward_scale=1.0,
+            forward_loss_weight=1.0,
             )
-        breakpoint()
         return policy
 
     def _setup_agents(self) -> None:
