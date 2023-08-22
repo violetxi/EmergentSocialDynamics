@@ -55,4 +55,4 @@ class CNNICM(CNN):
         obs = to_torch(obs, dtype=torch.float32)
         processed_obs = self.preprocess_fn(obs)
         logits = self.encoder(processed_obs.to("cuda"))
-        return logits     
+        return logits

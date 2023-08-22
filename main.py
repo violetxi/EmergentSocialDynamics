@@ -129,22 +129,39 @@ class TrainRunner:
             feature_net_module = import_module(
                 self.impolicy_config['world_model']['args']['feature_net']['module_path']
                 )
+            feature_net_cls = getattr(
+                feature_net_module, 
+                self.impolicy_config['world_model']['args']['feature_net']['class_name']
+                )
             feature_net_config = self.impolicy_config['world_model']['args']['feature_net']['config']
-            feature_net = feature_net_module(feature_net_config)
+            feature_net = feature_net_cls(feature_net_config).to(device)
             wm_module = import_module(
                 self.impolicy_config['world_model']['module_path']
                 )
-            im_model = wm_module(
+            wm_cls = getattr(
+                wm_module,
+                self.impolicy_config['world_model']['class_name']
+            )
+            im_model = wm_cls(
                 feature_net=feature_net,
-                **self.impolicy_config['world_model']['kwargs']
+                **self.impolicy_config['world_model']['kwargs'],
+                device=device,
                 )
+            im_model = im_model.to(device)  
             im_wm_optim = torch.optim.Adam(im_model.parameters(), lr=self.args.lr)
-            policy = import_module(
+            policy_module = import_module(
+                self.impolicy_config['module_path']
+                )
+            policy_cls = getattr(
+                policy_module,
+                self.impolicy_config['class_name']
+                )
+            policy = policy_cls(
                 policy=ppo,
                 model=im_model,
                 optim=im_wm_optim,
                 **self.impolicy_config['args']
-                )            
+                ) 
         else:
             policy = PPOPolicy(
                 actor=actor,
@@ -154,7 +171,6 @@ class TrainRunner:
                 discount_factor=self.args.gamma,
                 **self.policy_config
             )
-        breakpoint()
         return policy
 
     def _setup_agents(self) -> None:

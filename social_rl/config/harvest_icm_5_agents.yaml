@@ -1,6 +1,6 @@
 Environment:
   base_env_kwargs:
-    env: 'cleanup'
+    env: 'harvest'
     num_agents: 2
     use_collective_reward: False
     inequity_averse_reward: False

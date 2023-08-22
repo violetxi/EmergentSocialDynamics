@@ -1,7 +1,7 @@
 Environment:
   base_env_kwargs:
     env: 'cleanup'
-    num_agents: 2
+    num_agents: 5
     use_collective_reward: False
     inequity_averse_reward: False
     alpha: 0.0
