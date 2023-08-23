@@ -311,7 +311,7 @@ class TrainRunner:
         args = self.args
         ensure_dir(args.logdir)
         task_name = self.log_path.split('/')[1].split('_')[0]        
-        model_name = os.path.basename(args.config).split('.')[0]        
+        model_name = os.path.basename(args.config).split('.yaml')[0]        
         # save eval step-wise agent reward data, in case of reruns with duplicated 
         # model and hypere-parameter settings, replace the data
         result_path = os.path.join(args.logdir, f"{task_name}.pkl")
@@ -354,8 +354,7 @@ class TrainRunner:
             frames: list of frames
             filename: filename to save video to
         """
-        print(f"Saving video to {filename}..")
-        #height, width, layers = frames[0].shape
+        print(f"Saving video to {filename}..")        
         height = 500
         width = 300
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -377,12 +376,12 @@ class TrainRunner:
         fig, ax = plt.subplots()
         for agent_id, rewards in rewards_dict.items():
             ax.plot(
-                rewards[:cur_steps], 
+                np.cumsum(rewards[:cur_steps]), 
                 label=f"Agent {agent_id}", 
                 color=self.agent_colors[agent_id],
                 alpha=0.5)
 
-        ax.set_title("Reward at Each Step for Each Agent")
+        ax.set_title("Cumulative Reward for Each Agent")
         ax.set_xlabel("Steps")
         ax.set_ylabel("Reward")
         ax.set_xlim([0, max_steps])  # Set x-axis limits
