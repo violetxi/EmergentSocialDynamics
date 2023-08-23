@@ -34,7 +34,7 @@ class CNN(nn.Module):
     def preprocess_fn(self, obs):
             """Preprocess observation in image format
             """
-            transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])            
+            transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])              
             ob = obs.observation.curr_obs
             processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in ob])
             return processed_ob
@@ -50,6 +50,13 @@ class CNNICM(CNN):
     def __init__(self, config):
         super().__init__(config)
     
+    def preprocess_fn(self, obs):
+        """Preprocess observation in image format
+        """
+        transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])                      
+        processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in obs])
+        return processed_ob
+
     # override forward method such that there is no state returned
     def forward(self, obs, state=None, info={}):
         obs = to_torch(obs, dtype=torch.float32)

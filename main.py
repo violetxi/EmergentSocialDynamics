@@ -8,7 +8,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Optional
 from importlib import import_module
 
 import torch
@@ -208,7 +208,7 @@ class TrainRunner:
             # only 'config' will not be included in the DefaultGlobalArgs
             if k == 'config':
                 args_diffs.insert(
-                    0, f'{v.split("/")[-1].split(".")[0]}'
+                    0, f'{v.split("/")[-1].split(".yaml")[0]}'
                     )
             elif k in ['ckpt_dir', 'eval_only']:
                 pass
