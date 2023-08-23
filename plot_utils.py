@@ -63,8 +63,7 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
         # Prepare data for computing
         avg_returns = {}
         for run in data:
-            for model, episodes in run.items():                
-                print(model)
+            for model, episodes in run.items():
                 if model not in avg_returns:
                     avg_returns[model] = {agent: [] for agent in episodes[0].keys()}
                 for episode in episodes:
@@ -89,8 +88,8 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
     # Determine unique agent counts across models
     agent_counts = df.groupby('model')['agent'].nunique().unique()    
     sns.set_palette("colorblind")    
-    # Create subplots for each unique agent count
-    fig, axes = plt.subplots(len(agent_counts), 1, figsize=(15, 10 * len(agent_counts)))    
+    # Create subplots for each unique agent count    
+    fig, axes = plt.subplots(1, len(agent_counts), figsize=(15 * len(agent_counts), 10))
     # Ensure axes is a list for consistency in indexing
     if len(agent_counts) == 1:
         axes = [axes]    
