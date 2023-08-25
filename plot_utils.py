@@ -48,7 +48,7 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
         ax.set_title(f"Average Cumulative Rewards over Episodes for {model}")
         ax.set_xlabel("Steps")
         ax.set_ylabel("Average Cumulative Reward")
-        ax.legend()
+        ax.legend(title="Agent",  prop={'size': 12}, title_fontsize='14')
         sns.despine()
         # save the plot 
         fig_save_path = os.path.join(folder_name, f"{model}.png")
@@ -105,7 +105,7 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
         axes[i].set_title(f"Average Return for Models with {count} Agents")
         axes[i].set_xlabel("Agent")
         axes[i].set_ylabel("Average Return per Episode")
-        axes[i].legend(title="Model")
+        axes[i].legend(title="Model", prop={'size': 12}, title_fontsize='14')
     
     sns.despine()
     plt.tight_layout()
@@ -116,29 +116,6 @@ def plot_avg_return_with_std_error(result_path: str) -> None:
     plt.savefig(fig_save_path)
     print(f"Plot saved to {fig_save_path}")
     plt.close()
-
-
-    # df = pd.DataFrame({
-    #     'model': model,
-    #     'agent': agent,
-    #     'reward': rewards
-    #     } for model_res in data 
-    #     for model, agent_rewards_list in model_res.items() 
-    #     for agent_rewards in agent_rewards_list 
-    #     for agent, rewards in agent_rewards.items()
-    #     )
-    # df = df.explode('reward')
-
-    # sns.set_palette("colorblind")
-    # # Remove grid lines and plot the bar plot grouped by agent_id with standard error
-    # plt.figure(figsize=(15, 10))
-    # # bar plot with standard error
-    # sns.barplot(x="agent", y="reward", hue="model", data=df, errorbar='se', capsize=.1)
-    # plt.title("Average Return for Each Agent in Each Model")
-    # plt.xlabel("Agent")
-    # plt.ylabel("Average Return")
-    # plt.legend(title="Model")
-    # sns.despine()    
 
 
 if __name__ == '__main__':

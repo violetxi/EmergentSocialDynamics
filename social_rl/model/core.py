@@ -36,12 +36,18 @@ class CNN(nn.Module):
             """
             transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])              
             ob = obs.observation.curr_obs
-            processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in ob])
+            if len(ob.shape) > 4:                
+                bs, stack_num, h, w, c = ob.shape
+                ob = ob.reshape(bs*stack_num, h, w, c)
+                processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in ob])
+                processed_ob = processed_ob.reshape(bs, stack_num, h, w)
+            else:
+                processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in ob])
             return processed_ob
 
     def forward(self, obs, state=None, info={}):
         obs = to_torch(obs, dtype=torch.float32)
-        processed_obs = self.preprocess_fn(obs)
+        processed_obs = self.preprocess_fn(obs)        
         logits = self.encoder(processed_obs.to("cuda"))
         return logits, state
 
@@ -63,3 +69,5 @@ class CNNICM(CNN):
         processed_obs = self.preprocess_fn(obs)
         logits = self.encoder(processed_obs.to("cuda"))
         return logits
+    
+    

@@ -57,7 +57,7 @@ class parallel_env(ParallelEnv):
         # maybe consider redoing the environment in gymnasium if it's worthwile
         # but currently this hack works...
         n_actions = self._env.action_space.n
-        return gym.spaces.Discrete(n_actions)        
+        return gym.spaces.Discrete(n_actions)
 
     def render(self):
         """

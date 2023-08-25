@@ -8,8 +8,7 @@ class DefaultGlobalArgs:
     Default global arguments for all algorithms 
     """
     reward_threshold: float = 4500
-    seed: int = 1626
-    buffer_size: int = 20_000
+    seed: int = 1626    
     lr: float = 1e-4
     gamma: float = 0.99    # discount factor
     epoch: int = 1000
@@ -19,6 +18,9 @@ class DefaultGlobalArgs:
     episode_per_collect: int = None   # None means use step_per_collect, vice versa    
     repeat_per_collect: int = 10    # number of policy learning per collect
     batch_size: int = 2048
+    # buffer size is multiplied by number of train envs in the vectorized environment
+    buffer_size: int = 20_000
+    stack_num: int = 1    # default to 1 for Markovian models
     # number of train and test envs in the vectorized environment
     train_env_num: int = 10
     test_env_num: int = 2
