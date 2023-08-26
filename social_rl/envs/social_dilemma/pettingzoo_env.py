@@ -1,8 +1,9 @@
 import functools
 from typing import Any, Dict
+from collections import deque
+from copy import deepcopy
 
 import numpy as np
-
 import gymnasium as gym
 from pettingzoo import ParallelEnv
 
@@ -11,12 +12,18 @@ from social_rl.envs.social_dilemma.env_creator import get_env_creator
 
 class parallel_env(ParallelEnv):
     metadata = {"render_modes": ["rgb_array"], "name": "social_dilemmas"}
-
+    """PettingZoo ParallelEnv Wrapper for social dilemma environments
+    :param base_env_kwargs: keyword arguments to pass to the base ssd env
+    :param max_cycles: maximum number of steps per episode
+    :param render_mode: render mode for the environment
+    :param stack_num: number of frames to stack for observation and action
+    """
     def __init__(
             self, 
             base_env_kwargs: Dict[str, Any],
             max_cycles: int =5000,            
             render_mode: str =None,
+            stack_num: int = 1,
             ) -> None:
         """
         The init method takes in environment arguments and
@@ -34,7 +41,10 @@ class parallel_env(ParallelEnv):
         )
         self.max_cycles = max_cycles  
         self.render_mode = render_mode
-        self.steps = 0        
+        self.stack_num = stack_num
+        if self.stack_num > 1:            
+            self.observation_history = deque(maxlen=self.stack_num - 1)
+        self.steps = 0
 
     # Observation space should be defined here.
     # lru_cache allows observation and action spaces to be memoized, reducing clock cycles required to get each agent's space.
@@ -97,16 +107,57 @@ class parallel_env(ParallelEnv):
         obs_out = {}
         info = {}
         for agent_id, ob in obs.items():
-            obs_out[agent_id] = {
-                'observation': ob, 
-                'action_mask': np.ones(self._env.action_space.n, "int8")
-                }
+            if self.stack_num > 1:
+                obs_out[agent_id] = {
+                    'observation': {},
+                    'action_mask': np.ones(self._env.action_space.n, "int8")
+                }                
+            else:
+                obs_out[agent_id] = {
+                    'observation': ob, 
+                    'action_mask': np.ones(self._env.action_space.n, "int8")
+                    }
             info[agent_id] = {}
+        if self.stack_num > 1:
+            self.stack_obs(obs, obs_out)
         return obs_out, info
 
+    def stack_obs(self, obs, obs_out):
+        # if not enough history to stack, repeat "wait" action until 
+        # we have enough history
+        if self.steps < self.stack_num:
+            self.observation_history.extend([
+                obs for _ in range(self.stack_num - 1)]
+                )
+            self.steps = self.stack_num
+        # stack current observation with past history
+        obs_history_list = list(self.observation_history)
+        obs_history_list.append(obs)
+        agent_obs_dict = {
+            agent_id : {
+                'curr_obs': [],
+                'other_agent_actions': [],
+                'self_actions': [],
+                'visible_agents': [],
+                'prev_visible_agents': []
+                } for agent_id in self.agents
+            }
+        # reformat history into dict of lists
+        for obs_hist in obs_history_list:
+            for agent_id in self.agents:
+                obs_hist_agent = obs_hist[agent_id]
+                for k, v in obs_hist_agent.items():
+                    agent_obs_dict[agent_id][k].append(v)
+        # add current observation to history
+        for agent_id, obs_agent in obs.items():
+            for k, _ in obs_agent.items():
+                obs_out[agent_id]['observation'][k] = np.stack(
+                    np.stack(agent_obs_dict[agent_id][k])
+                    )
+        # add current observation to history
+        self.observation_history.append(obs)
+
     def step(self, actions):
-        #@TODO: it's better to return things as np.array and use index to keep track of 
-        # agents
         """        
         :param actions: a dict of actions for each agent
 
@@ -117,7 +168,7 @@ class parallel_env(ParallelEnv):
             - terminations: SSD doesn't terminate, so terminate when max_cycles is reached
             - info
         dicts where each dict looks like {agent_1: item_1, agent_2: item_2}
-        """        
+        """                        
         self.steps += 1
         actions = dict(zip(self.possible_agents, actions))
         obs, rewards, terminations, info = self._env.step(actions)                        
@@ -131,18 +182,28 @@ class parallel_env(ParallelEnv):
         # __all__ is a special key for PettingZoo envs that indicates all agents are done        
         if '__all__' in terminations:
             del terminations['__all__']
-
+        # stack observations and actions if asked for
         for agent_id in self.possible_agents:
-            obs_out[agent_id] = {
-                'observation': obs[agent_id], 
-                'action_mask': np.ones(self._env.action_space.n, "int8")
-                }
+            if self.stack_num > 1:
+                obs_out[agent_id] = {
+                    'observation': {},
+                    'action_mask': np.ones(self._env.action_space.n, "int8")
+                }                
+            else:
+                obs_out[agent_id] = {
+                    'observation': obs[agent_id],
+                    'action_mask': np.ones(self._env.action_space.n, "int8")
+                }            
             rewards_out.append(rewards[agent_id])
+            # terminations and truncations are the same for all agents, keep one per
+            # env to be compatible with TianShou Buffer processes
             terminations_out.append(terminations[agent_id]) 
             truncations_out.append(False) # no truncation in SSD
-            info[agent_id] = {}        
-        # terminations and truncations are the same for all agents, keep one per
-        # env to be compatible with TianShou Buffer processes
+            info[agent_id] = {}                
+        # stack observations and actions if asked for                   
+        if self.stack_num > 1:
+            self.stack_obs(obs, obs_out)
+
         return obs_out, rewards_out, np.all(terminations_out), \
             np.all(truncations_out), info
 

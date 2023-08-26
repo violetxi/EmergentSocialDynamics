@@ -146,6 +146,12 @@ class MapEnv:
                     shape=(self.num_agents - 1,),
                     dtype=np.uint8,
                 ),
+                "self_actions": Box(
+                    low=0,
+                    high=len(self.all_actions),
+                    shape=(1,),
+                    dtype=np.uint8,
+                ),
                 "visible_agents": Box(
                     low=0,
                     high=1,
@@ -275,10 +281,12 @@ class MapEnv:
                 prev_actions = np.array(
                     [actions[key] for key in sorted(actions.keys()) if key != agent.agent_id]
                 ).astype(np.uint8)
+                self_action = np.array([actions[agent.agent_id]]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
+                    "self_actions": self_action,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
                 }
@@ -334,10 +342,12 @@ class MapEnv:
             if self.return_agent_actions:
                 # No previous actions so just pass in "wait" action
                 prev_actions = np.array([4 for _ in range(self.num_agents - 1)]).astype(np.uint8)
+                self_action = np.array([4]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
+                    "self_actions": self_action,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
                 }

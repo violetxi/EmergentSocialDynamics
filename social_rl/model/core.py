@@ -47,7 +47,7 @@ class CNN(nn.Module):
 
     def forward(self, obs, state=None, info={}):
         obs = to_torch(obs, dtype=torch.float32)
-        processed_obs = self.preprocess_fn(obs)        
+        processed_obs = self.preprocess_fn(obs)
         logits = self.encoder(processed_obs.to("cuda"))
         return logits, state
 

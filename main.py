@@ -187,7 +187,7 @@ class TrainRunner:
         train_buffer = VectorReplayBuffer(
             self.args.buffer_size * self.args.train_env_num,
             buffer_num=self.args.train_env_num,
-            stack_num=self.args.stack_num,
+            #stack_num=self.args.stack_num,
         )        
         self.train_collector = Collector(
             self.policy,
@@ -237,16 +237,16 @@ class TrainRunner:
         # logger setup     
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         wandb_run_name = f"{self.log_name}-{cur_time}"        
-        # logger = WandbLogger(
-        #     update_interval=args.update_interval,
-        #     save_interval=args.save_interval,
-        #     project=args.project_name,
-        #     name=wandb_run_name,
-        #     config=self.config,
-        #     )
-        # writer = SummaryWriter(self.log_path)
-        # writer.add_text("args", str(args))
-        # logger.load(writer)
+        logger = WandbLogger(
+            update_interval=args.update_interval,
+            save_interval=args.save_interval,
+            project=args.project_name,
+            name=wandb_run_name,
+            config=self.config,
+            )
+        writer = SummaryWriter(self.log_path)
+        writer.add_text("args", str(args))
+        logger.load(writer)
         # run trainer
         train_result = onpolicy_trainer(
             policy=self.policy,

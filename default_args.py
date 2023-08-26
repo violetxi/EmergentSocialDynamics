@@ -20,7 +20,7 @@ class DefaultGlobalArgs:
     batch_size: int = 2048
     # buffer size is multiplied by number of train envs in the vectorized environment
     buffer_size: int = 20_000
-    stack_num: int = 1    # default to 1 for Markovian models
+    #stack_num: int = 1    # default to 1 for Markovian models
     # number of train and test envs in the vectorized environment
     train_env_num: int = 10
     test_env_num: int = 2
