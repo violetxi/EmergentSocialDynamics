@@ -174,3 +174,5 @@ log/
 backup/
 # vs code stuff
 .vscode/
+# hydra output
+outputs/

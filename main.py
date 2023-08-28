@@ -37,18 +37,16 @@ from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
 from social_rl.utils.loggers.wandb_logger import WandbLogger
 from social_rl.utils.utils import ensure_dir
 
-from default_args import DefaultGlobalArgs
-
-
-def get_args():
-    global_config = DefaultGlobalArgs()
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, required=True)
-    # add default arguments    
-    for field, default in global_config.__annotations__.items():
-        parser.add_argument(f'--{field}', default=getattr(global_config, field), type=default)    
-    args = parser.parse_known_args()[0]
-    return args
+import hydra
+from omegaconf import (
+    DictConfig,
+    OmegaConf
+    )
+from hydra.core.hydra_config import HydraConfig
+from hydra.utils import (
+    get_original_cwd, 
+    to_absolute_path
+    )
 
 
 def get_env(env_config):
@@ -59,8 +57,8 @@ def get_env(env_config):
 class TrainRunner:
     def __init__(
             self, 
-            args: argparse.Namespace
-            ) -> None:
+            args: argparse.Namespace,
+            ) -> None:        
         self.args = args
         self.train_step_agent_rews = None
         self.eval_step_agent_rews = None
@@ -68,33 +66,33 @@ class TrainRunner:
         self._setup_env()
         self.set_seed()
         self._setup_agents()
-        self._setup_collectors()
-        self.log_name = self._get_save_path()
-        self.log_path = os.path.join(args.logdir, self.log_name)        
-        os.makedirs(self.log_path, exist_ok=True)
+        self._setup_collectors()                
 
     def set_seed(self) -> None:
         # @TODO: allow automatically generating seeds for N test and M train envs
-        seed = self.args.seed
+        seed = self.args.exp_run.seed
         np.random.seed(seed)
         torch.manual_seed(seed)
-        if self.args.device == 'cuda':
+        if self.args.exp_run.device == 'cuda':
             torch.cuda.manual_seed(seed)
         #self.train_envs.seed()
         #self.test_envs.seed(seed)
 
     def _load_config(self) -> None:
-        with open(self.args.config, 'r') as stream:
-            configs = yaml.safe_load(stream)
-        self.config = configs
-        self.env_config = configs['Environment']        
-        self.net_config = configs['Net']
-        self.policy_config = configs['PPOPolicy']
-        if 'IMPolicy' in configs:
-            self.impolicy_config = configs['IMPolicy']
+        hydra_cfg = HydraConfig.get()
+        # path to save and load checkpoints
+        self.output_dir = os.path.join(get_original_cwd(), hydra_cfg.run.dir)
+        self.log_name = self.output_dir.split('/')[-3]
+        # configuration for environment and agents
+        self.config = OmegaConf.to_container(self.args, resolve=True)
+        self.env_config = self.config['environment']        
+        self.net_config = self.config['model']['net']
+        self.policy_config = self.config['model']['PPOPolicy']
+        if 'IMPolicy' in self.config['model']:
+            self.impolicy_config = self.config['model']['IMPolicy']
             self.model_based = True
         else:
-            self.model_based = False        
+            self.model_based = False
 
 
     def _setup_env(self) -> None:        
@@ -105,13 +103,13 @@ class TrainRunner:
         # these will be used for evaluation and plotting
         self.env_agents = env.possible_agents
         self.agent_colors = env.get_agent_colors()
-        # trainer will use this to collect data
-        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.train_env_num)])
-        self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.test_env_num)])        
+        # trainer will use this to collect data        
+        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.exp_run.train_env_num)])
+        self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.exp_run.test_env_num)])
     
     def _setup_single_agent(self, agent_id) -> PPOPolicy:
         net = CNN(self.net_config)
-        device = self.args.device
+        device = self.args.exp_run.device
         action_shape = self.action_space.n
         actor = Actor(net, action_shape, device=device).to(device)
         critic = Critic(net, device=device).to(device)
@@ -121,7 +119,10 @@ class TrainRunner:
             if isinstance(m, torch.nn.Linear):
                 torch.nn.init.orthogonal_(m.weight)
                 torch.nn.init.zeros_(m.bias)
-        optim = torch.optim.Adam(actor_critic.parameters(), lr=self.args.lr)        
+        optim = torch.optim.Adam(
+            actor_critic.parameters(), 
+            lr=self.args.agent.optim.ppo_lr
+            )
         dist = torch.distributions.Categorical        
         if self.model_based:
             ppo = PPOPolicy(
@@ -129,7 +130,6 @@ class TrainRunner:
                 critic=critic,
                 optim=optim,
                 dist_fn=dist,
-                discount_factor=self.args.gamma,
                 **self.policy_config
             )            
             feature_net_module = import_module(
@@ -154,7 +154,10 @@ class TrainRunner:
                 device=device,
                 )
             im_model = im_model.to(device)  
-            im_wm_optim = torch.optim.Adam(im_model.parameters(), lr=self.args.lr)
+            im_wm_optim = torch.optim.Adam(
+                im_model.parameters(), 
+                lr=self.args.agent.optim.wm_lr
+                )
             policy_module = import_module(
                 self.impolicy_config['module_path']
                 )
@@ -174,7 +177,7 @@ class TrainRunner:
                 critic=critic,
                 optim=optim,
                 dist_fn=dist,
-                discount_factor=self.args.gamma,
+                #discount_factor=self.args.gamma,
                 **self.policy_config
             )
         return policy
@@ -207,8 +210,8 @@ class TrainRunner:
 
     def _setup_collectors(self) -> None:
         train_buffer = VectorReplayBuffer(
-            self.args.buffer_size * self.args.train_env_num,
-            buffer_num=self.args.train_env_num,            
+            self.args.exp_run.buffer_size * self.args.exp_run.train_env_num,
+            buffer_num=self.args.exp_run.train_env_num,            
         )        
         self.train_collector = Collector(
             self.policy,
@@ -224,32 +227,15 @@ class TrainRunner:
             exploration_noise=True,
             )
 
-    def _get_save_path(self):
-        default_args = vars(DefaultGlobalArgs())
-        curr_args = vars(self.args)
-        args_diffs = []
-        for k, v in curr_args.items():
-            # only 'config' will not be included in the DefaultGlobalArgs
-            if k == 'config':
-                args_diffs.insert(
-                    0, f'{v.split("/")[-1].split(".yaml")[0]}'
-                    )
-            elif k in ['ckpt_dir', 'eval_only']:
-                pass
-            else:
-                if v != default_args[k]:
-                    args_diffs.append(f'{k}_{curr_args[k]}')
-        return '-'.join(args_diffs)
-
     """ Defining call back functions for onpolicy_trainer """
     def save_best_fn(self, policy):
         for agent_id in self.env_agents:
             model_save_path = os.path.join(
-                self.log_path, f"best_policy-{agent_id}.pth")
+                self.output_dir, f"best_policy-{agent_id}.pth")
             torch.save(policy.policies[agent_id].state_dict(), model_save_path)
 
     def stop_fn(self, mean_rewards):
-        return mean_rewards >= args.reward_threshold
+        return mean_rewards >= self.args.trainer.stop_fn.reward_threshold
 
     def reward_metric(self, rews):
         # rews: (n_ep, n_agent)
@@ -258,16 +244,16 @@ class TrainRunner:
     def train(self) -> None:
         args = self.args
         # logger setup     
-        cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")        
         wandb_run_name = f"{self.log_name}-{cur_time}"        
         logger = WandbLogger(
-            update_interval=args.update_interval,
-            save_interval=args.save_interval,
-            project=args.project_name,
+            update_interval=args.wandb.update_interval,
+            save_interval=args.wandb.save_interval,
+            project=args.wandb.project_name,
             name=wandb_run_name,
             config=self.config,
             )
-        writer = SummaryWriter(self.log_path)
+        writer = SummaryWriter(self.output_dir)
         writer.add_text("args", str(args))
         logger.load(writer)
         # run trainer
@@ -275,28 +261,28 @@ class TrainRunner:
             policy=self.policy,
             train_collector=self.train_collector,
             test_collector=self.test_collector,
-            max_epoch=args.epoch,
-            step_per_epoch=args.step_per_epoch,
-            repeat_per_collect=args.repeat_per_collect,
-            episode_per_test=args.test_eps,   # number of episodes tested during training
-            batch_size=args.batch_size,            
-            step_per_collect=args.step_per_collect,
-            episode_per_collect=args.episode_per_collect,
+            max_epoch=args.trainer.max_epoch,
+            step_per_epoch=args.trainer.step_per_epoch,
+            repeat_per_collect=args.trainer.repeat_per_collect,
+            episode_per_test=args.trainer.test_eps,   # number of episodes tested during training
+            batch_size=args.trainer.batch_size,            
+            step_per_collect=args.trainer.step_per_collect,
+            episode_per_collect=args.trainer.episode_per_collect,
             save_best_fn=self.save_best_fn,
             reward_metric=self.reward_metric,    # used in Collector                        
             stop_fn=self.stop_fn,
             logger=logger
             )
         # save training result
-        train_result_save_path = os.path.join(self.log_path, 'train_result.pkl')
+        train_result_save_path = os.path.join(self.output_dir, 'train_result.pkl')
         with open(train_result_save_path, 'wb') as f:
             pickle.dump(train_result, f)        
         print(f"\n========== Test Result during training==========\n{train_result}")
 
     def eval(self) -> None:
         args = self.args
-        if args.eval_only:
-            ckpts = glob.glob(f'{args.ckpt_dir}/*.pth')
+        if args.exp_run.eval_only:
+            ckpts = glob.glob(f'{args.exp_run.ckpt_dir}/*.pth')
             agent_ckpts = {ckpt.split('-')[-1].split('.')[0]: ckpt for ckpt in ckpts}            
             for agent_id, agent_policy in self.policy.policies.items():
                 agent_policy.load_state_dict(torch.load(agent_ckpts[agent_id]))
@@ -327,44 +313,44 @@ class TrainRunner:
                 })
         return output
 
-    def save_results(
-            self, 
-            data: np.ndarray,
-            episode_frames: Optional[List[List[np.ndarray]]] = None
-            ) -> None:        
-        args = self.args
-        ensure_dir(args.logdir)
-        task_name = self.log_path.split('/')[1].split('_')[0]        
-        model_name = os.path.basename(args.config).split('.yaml')[0]        
-        # save eval step-wise agent reward data, in case of reruns with duplicated 
-        # model and hypere-parameter settings, replace the data
-        result_path = os.path.join(args.logdir, f"{task_name}.pkl")
-        data = self._convert_save_data(data)
-        if os.path.exists(result_path):
-            print(f"{result_path} alreadying exist, appending data..")
-            with open(result_path, 'rb') as f:
-                existing_data = pickle.load(f)
-                existing_models = [k for data in existing_data for k in data.keys()]
-                model_idx = existing_models.index(model_name) \
-                    if model_name in existing_models else None
-                # if same model&hyperparam is tested in the past, replace
-                if model_idx is not None:
-                    print("Model already exist, replacing..")
-                    existing_data[model_idx] = {model_name: data}
-                else:
-                    print("Model not exist, appending..")
-                    existing_data.append({model_name: data})
-        else:
-            existing_data = [{model_name: data}]
-        with open(result_path, 'wb') as f:
-            pickle.dump(existing_data, f)
-        print(f"data saved to {result_path}..")
-        # create videos
-        video_folder = os.path.join("videos", model_name)
-        ensure_dir(video_folder)
-        for i, run_frames in enumerate(episode_frames):
-            video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            
-            self.save_video(run_frames, data[i], video_path)
+    # def save_results(
+    #         self, 
+    #         data: np.ndarray,
+    #         episode_frames: Optional[List[List[np.ndarray]]] = None
+    #         ) -> None:        
+    #     args = self.args
+    #     #ensure_dir(args.logdir)
+    #     task_name = self.log_path.split('/')[1].split('_')[0]        
+    #     model_name = os.path.basename(args.config).split('.yaml')[0]        
+    #     # save eval step-wise agent reward data, in case of reruns with duplicated 
+    #     # model and hypere-parameter settings, replace the data
+    #     # result_path = os.path.join(args.logdir, f"{task_name}.pkl")
+    #     data = self._convert_save_data(data)
+    #     if os.path.exists(result_path):
+    #         print(f"{result_path} alreadying exist, appending data..")
+    #         with open(result_path, 'rb') as f:
+    #             existing_data = pickle.load(f)
+    #             existing_models = [k for data in existing_data for k in data.keys()]
+    #             model_idx = existing_models.index(model_name) \
+    #                 if model_name in existing_models else None
+    #             # if same model&hyperparam is tested in the past, replace
+    #             if model_idx is not None:
+    #                 print("Model already exist, replacing..")
+    #                 existing_data[model_idx] = {model_name: data}
+    #             else:
+    #                 print("Model not exist, appending..")
+    #                 existing_data.append({model_name: data})
+    #     else:
+    #         existing_data = [{model_name: data}]
+    #     with open(result_path, 'wb') as f:
+    #         pickle.dump(existing_data, f)
+    #     print(f"data saved to {result_path}..")
+    #     # create videos
+    #     video_folder = os.path.join("videos", model_name)
+    #     ensure_dir(video_folder)
+    #     for i, run_frames in enumerate(episode_frames):
+    #         video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            
+    #         self.save_video(run_frames, data[i], video_path)
 
     # write a function to save list of frames to video
     def save_video(
@@ -418,16 +404,25 @@ class TrainRunner:
         return image
 
     def run(self) -> None:
-        if not self.args.eval_only:
+        if not self.args.exp_run.eval_only:
             self.train()                
-            self.eval()
+            #self.eval()
         else:
-            assert self.args.ckpt_dir is not None, \
+            assert self.args.exp_run.ckpt_dir is not None, \
                 "ckpt_dir must be specified for eval_only"
             self.eval()
 
 
-if __name__ == "__main__":
-    args = get_args()
+# version 1.2 doesn't change cwd to output
+@hydra.main(config_path="config", config_name="config", version_base="1.2")
+def main(args: DictConfig) -> None:        
     train_runner = TrainRunner(args)
     train_runner.run()
+
+
+if __name__ == "__main__":
+    main()    
+
+    # args = get_args()
+    # train_runner = TrainRunner(args)
+    # train_runner.run()
