@@ -1,3 +1,4 @@
+import time
 import functools
 from typing import Any, Dict
 from collections import deque
@@ -119,7 +120,7 @@ class parallel_env(ParallelEnv):
                     }
             info[agent_id] = {}
         if self.stack_num > 1:
-            self.stack_obs(obs, obs_out)
+            self.stack_obs(obs, obs_out)        
         return obs_out, info
 
     def stack_obs(self, obs, obs_out):
@@ -202,7 +203,7 @@ class parallel_env(ParallelEnv):
             info[agent_id] = {}                
         # stack observations and actions if asked for                   
         if self.stack_num > 1:
-            self.stack_obs(obs, obs_out)
+            self.stack_obs(obs, obs_out)            
 
         return obs_out, rewards_out, np.all(terminations_out), \
             np.all(truncations_out), info

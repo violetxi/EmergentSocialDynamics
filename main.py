@@ -13,10 +13,16 @@ from importlib import import_module
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-# to supress tensorboard pkg_resources deprecated warnings
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="gym")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorboard")
+from torchvision.transforms import (    
+    Compose, 
+    ToPILImage,
+    Grayscale, 
+    ToTensor    
+)
+# to supress tensorboard pkg_resources deprecated warnings
 from tianshou.data import VectorReplayBuffer
 from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
@@ -182,22 +188,39 @@ class TrainRunner:
             self.env_agents,
             self.action_space
             )
+        
+    def preprocess_fn(self, obs):
+        """Preprocess observation in image format to tensor format in grayscale
+        used in collector
+        :param obs: observation in image format (num_envs, )
+        """
+        transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])        
+        for i, env_ob in enumerate(obs):
+            for agent_id, agent_ob in env_ob.items():
+                ob = agent_ob['observation']['curr_obs']
+                if len(ob.shape) == 3:
+                    processed_ob = transform(ob).unsqueeze(0)
+                else:
+                    processed_ob = torch.stack([transform(ob_i) for ob_i in ob])
+                agent_ob['observation']['curr_obs'] = processed_ob                
+        return obs
 
     def _setup_collectors(self) -> None:
         train_buffer = VectorReplayBuffer(
             self.args.buffer_size * self.args.train_env_num,
-            buffer_num=self.args.train_env_num,
-            #stack_num=self.args.stack_num,
+            buffer_num=self.args.train_env_num,            
         )        
         self.train_collector = Collector(
             self.policy,
             self.train_envs,
             train_buffer,
+            preprocess_fn=self.preprocess_fn,
             exploration_noise=True,
             )
         self.test_collector = Collector(
             self.policy, 
             self.test_envs, 
+            preprocess_fn=self.preprocess_fn,
             exploration_noise=True,
             )
 
@@ -235,18 +258,18 @@ class TrainRunner:
     def train(self) -> None:
         args = self.args
         # logger setup     
-        cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        wandb_run_name = f"{self.log_name}-{cur_time}"        
-        logger = WandbLogger(
-            update_interval=args.update_interval,
-            save_interval=args.save_interval,
-            project=args.project_name,
-            name=wandb_run_name,
-            config=self.config,
-            )
-        writer = SummaryWriter(self.log_path)
-        writer.add_text("args", str(args))
-        logger.load(writer)
+        # cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # wandb_run_name = f"{self.log_name}-{cur_time}"        
+        # logger = WandbLogger(
+        #     update_interval=args.update_interval,
+        #     save_interval=args.save_interval,
+        #     project=args.project_name,
+        #     name=wandb_run_name,
+        #     config=self.config,
+        #     )
+        # writer = SummaryWriter(self.log_path)
+        # writer.add_text("args", str(args))
+        # logger.load(writer)
         # run trainer
         train_result = onpolicy_trainer(
             policy=self.policy,

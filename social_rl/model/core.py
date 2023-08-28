@@ -1,11 +1,5 @@
 import torch
 from torch import nn
-from torchvision.transforms import (    
-    Compose, 
-    ToPILImage,
-    Grayscale, 
-    ToTensor    
-)
 from tianshou.data import to_torch
 
 
@@ -24,50 +18,34 @@ class CNN(nn.Module):
             nn.ReLU(),
         )
         self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
-        self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
-        self.preprocessing = Compose([
-            ToPILImage(),
-            Grayscale(),
-            ToTensor(),
-        ])
+        self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])         
 
-    def preprocess_fn(self, obs):
-            """Preprocess observation in image format
-            """
-            transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])              
-            ob = obs.observation.curr_obs
-            if len(ob.shape) > 4:                
-                bs, stack_num, h, w, c = ob.shape
-                ob = ob.reshape(bs*stack_num, h, w, c)
-                processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in ob])
-                processed_ob = processed_ob.reshape(bs, stack_num, h, w)
-            else:
-                processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in ob])
-            return processed_ob
-
-    def forward(self, obs, state=None, info={}):
-        obs = to_torch(obs, dtype=torch.float32)
-        processed_obs = self.preprocess_fn(obs)
-        logits = self.encoder(processed_obs.to("cuda"))
+    def forward(self, obs, state=None, info={}):        
+        process_obs = obs.observation.curr_obs.cuda()        
+        if len(process_obs.shape) == 5:
+            # stacked inputs assuming images are grayscaled
+            bs, ts, c, h, w = process_obs.shape
+            process_obs = process_obs.reshape(bs, ts, h, w)
+            logits = self.encoder(process_obs).reshape(bs, -1)
+        else:            
+            logits = self.encoder(process_obs)
         return logits, state
 
 
 class CNNICM(CNN):
     def __init__(self, config):
         super().__init__(config)
-    
-    def preprocess_fn(self, obs):
-        """Preprocess observation in image format
-        """
-        transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])                      
-        processed_ob = torch.stack([transform(ob_i.permute(2, 0, 1)) for ob_i in obs])
-        return processed_ob
 
     # override forward method such that there is no state returned
     def forward(self, obs, state=None, info={}):
-        obs = to_torch(obs, dtype=torch.float32)
-        processed_obs = self.preprocess_fn(obs)
-        logits = self.encoder(processed_obs.to("cuda"))
+        process_obs = obs.observation.curr_obs.cuda()        
+        if len(process_obs.shape) == 5:
+            # stacked inputs assuming images are grayscaled
+            bs, ts, c, h, w = process_obs.shape
+            process_obs = process_obs.reshape(bs, ts, h, w)
+            logits = self.encoder(process_obs).reshape(bs, -1)
+        else:            
+            logits = self.encoder(process_obs)
         return logits
     
     
