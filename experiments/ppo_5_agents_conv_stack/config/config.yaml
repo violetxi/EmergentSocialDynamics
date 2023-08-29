@@ -53,6 +53,8 @@ environment:
 model: 
   name: ppo
   net:
+    module_path: 'social_rl.model.core'
+    class_name: 'CNN'
     in_channels: ${environment.stack_num}
     out_channels: 6
     kernel_size: 3

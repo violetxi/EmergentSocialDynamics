@@ -104,7 +104,14 @@ class TrainRunner:
         self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.exp_run.test_env_num)])
     
     def _setup_single_agent(self, agent_id) -> PPOPolicy:
-        net = CNN(self.net_config)
+        net_module = import_module(
+            self.net_config['module_path']
+            )
+        feature_net_cls = getattr(
+            net_module,
+            self.net_config['class_name']
+            )
+        net = feature_net_cls(self.net_config)
         device = self.args.exp_run.device
         action_shape = self.action_space.n
         actor = Actor(net, action_shape, device=device).to(device)

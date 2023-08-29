@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from tianshou.data import to_torch
 
 
 class CNN(nn.Module):
@@ -18,7 +17,7 @@ class CNN(nn.Module):
             nn.ReLU(),
         )
         self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
-        self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])         
+        self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
 
     def forward(self, obs, state=None, info={}):        
         process_obs = obs.observation.curr_obs.cuda()        
@@ -48,4 +47,45 @@ class CNNICM(CNN):
             logits = self.encoder(process_obs)
         return logits
     
-    
+
+class ConvGRU(nn.Module):
+    def __init__(self, config):
+        """ CNN tested to work with model free agents (PPO) """
+        super(ConvGRU, self).__init__()
+        self.output_dim = config['output_dim']
+        self.encoder = nn.Sequential(
+            nn.Conv2d(config['in_channels'], config['out_channels'], config['kernel_size'], stride=config['stride']),
+            nn.ReLU(),            
+            nn.Flatten(),
+            nn.Linear(config['flatten_dim'], config['cnn_hidden_dim']),
+            nn.ReLU(),
+            nn.Linear(config['cnn_hidden_dim'], config['cnn_output_dim']),
+            nn.ReLU(),
+        )
+        self.gru = nn.GRU(
+            input_size=config['rnn_input_size'],
+            hidden_size=config['rnn_hidden_size'],
+            num_layers=config['rnn_num_layers'],
+            batch_first=config['rnn_batch_first'],
+        )
+        # get logits from GRU output
+        self.fc = nn.Linear(config['rnn_hidden_size'], config['output_dim'])
+        self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
+        self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
+
+    def forward(self, obs, state=None, info={}):
+        obs = obs.observation.curr_obs.cuda()        
+        # stacked inputs assuming images are grayscaled
+        bs, ts, c, h, w = obs.shape
+        processed_obs = []        
+        for i in range(ts):
+            processed_obs.append(self.encoder(obs[:, i, :, :, :]))
+        processed_obs = torch.stack(processed_obs).permute(1, 0, 2)
+        if state is None:
+            state = torch.zeros((
+                self.gru.num_layers, bs, self.gru.hidden_size
+                )).cuda()        
+        out, state = self.gru(processed_obs, state)
+        last_out = out[:, -1, :]
+        logits = self.fc(last_out)
+        return logits, state
