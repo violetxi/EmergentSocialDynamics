@@ -1,14 +1,13 @@
 import os
 import cv2
 import glob
-import yaml
 import pickle
 import datetime
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
-from typing import List, Dict, Optional
+from typing import List, Dict
 from importlib import import_module
 
 import torch
@@ -38,14 +37,11 @@ from social_rl.utils.loggers.wandb_logger import WandbLogger
 from social_rl.utils.utils import ensure_dir
 
 import hydra
+from hydra.utils import get_original_cwd
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import (
     DictConfig,
     OmegaConf
-    )
-from hydra.core.hydra_config import HydraConfig
-from hydra.utils import (
-    get_original_cwd, 
-    to_absolute_path
     )
 
 
@@ -155,7 +151,7 @@ class TrainRunner:
                 )
             im_model = im_model.to(device)  
             im_wm_optim = torch.optim.Adam(
-                im_model.parameters(), 
+                im_model.parameters(),
                 lr=self.args.agent.optim.wm_lr
                 )
             policy_module = import_module(
@@ -177,7 +173,6 @@ class TrainRunner:
                 critic=critic,
                 optim=optim,
                 dist_fn=dist,
-                #discount_factor=self.args.gamma,
                 **self.policy_config
             )
         return policy
@@ -413,16 +408,16 @@ class TrainRunner:
             self.eval()
 
 
-# version 1.2 doesn't change cwd to output
-@hydra.main(config_path="config", config_name="config", version_base="1.2")
-def main(args: DictConfig) -> None:        
-    train_runner = TrainRunner(args)
-    train_runner.run()
+# # version 1.2 doesn't change cwd to output
+# @hydra.main(config_path="config", config_name="config", version_base="1.2")
+# def main(args: DictConfig) -> None:
+#     # check for num_agents override for hyperparameter search
+#     num_agents_override = os.environ.get('NUM_AGENTS_OVERRIDE')
+#     if num_agents_override:
+#         args.environment.base_env_kwargs.num_agents = int(num_agents_override)
+#     train_runner = TrainRunner(args)
+#     train_runner.run()
 
 
-if __name__ == "__main__":
-    main()    
-
-    # args = get_args()
-    # train_runner = TrainRunner(args)
-    # train_runner.run()
+# if __name__ == "__main__":
+#     main()
