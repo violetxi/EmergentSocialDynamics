@@ -6,6 +6,8 @@ metric:
   goal: maximize # or 'maximize' based on the metric
 
 parameters:
+  environment.stack_num:
+    values: [4, 8, 12, 16, 20]
   agent.optim.ppo_lr:
     distribution: uniform
     min: 1e-5

@@ -6,9 +6,10 @@ import datetime
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 from copy import deepcopy
-from typing import List, Dict
 from importlib import import_module
+from typing import List, Dict, Optional
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -28,7 +29,6 @@ from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 
-from social_rl.model.core import CNN
 from social_rl.tianshou_elign.data import Collector
 from social_rl.tianshou_elign.env import VectorEnv
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
@@ -89,7 +89,6 @@ class TrainRunner:
             self.model_based = True
         else:
             self.model_based = False
-
 
     def _setup_env(self) -> None:        
         # this is just a dummpy for setting up other things later
@@ -283,20 +282,21 @@ class TrainRunner:
 
     def eval(self) -> None:
         args = self.args
-        if args.exp_run.eval_only:
-            ckpts = glob.glob(f'{args.exp_run.ckpt_dir}/*.pth')
+        assert args.result_dir is not None, \
+            "Please specify result_dir in config file"        
+        if args.exp_run.eval_only:            
+            ckpts = glob.glob(f'{args.ckpt_dir}/*.pth')            
             agent_ckpts = {ckpt.split('-')[-1].split('.')[0]: ckpt for ckpt in ckpts}            
             for agent_id, agent_policy in self.policy.policies.items():
                 agent_policy.load_state_dict(torch.load(agent_ckpts[agent_id]))
         # run testing
-        self.policy.eval()
-        print(f"\n========== Eval after training ==========")        
+        self.policy.eval()        
         eval_result = self.test_collector.collect(
-            n_episode=args.eval_eps,
+            n_episode=args.trainer.test_eps,
             render_mode='rgb_array'
             )
         step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
-        frames = eval_result.pop('frames')
+        frames = eval_result.pop('frames')        
         self.save_results(step_agent_reward, frames)
         print(f"\n========== Eval after training ==========\n{eval_result}")
 
@@ -315,47 +315,57 @@ class TrainRunner:
                 })
         return output
 
-    # def save_results(
-    #         self, 
-    #         data: np.ndarray,
-    #         episode_frames: Optional[List[List[np.ndarray]]] = None
-    #         ) -> None:        
-    #     args = self.args
-    #     #ensure_dir(args.logdir)
-    #     task_name = self.log_path.split('/')[1].split('_')[0]        
-    #     model_name = os.path.basename(args.config).split('.yaml')[0]        
-    #     # save eval step-wise agent reward data, in case of reruns with duplicated 
-    #     # model and hypere-parameter settings, replace the data
-    #     # result_path = os.path.join(args.logdir, f"{task_name}.pkl")
-    #     data = self._convert_save_data(data)
-    #     if os.path.exists(result_path):
-    #         print(f"{result_path} alreadying exist, appending data..")
-    #         with open(result_path, 'rb') as f:
-    #             existing_data = pickle.load(f)
-    #             existing_models = [k for data in existing_data for k in data.keys()]
-    #             model_idx = existing_models.index(model_name) \
-    #                 if model_name in existing_models else None
-    #             # if same model&hyperparam is tested in the past, replace
-    #             if model_idx is not None:
-    #                 print("Model already exist, replacing..")
-    #                 existing_data[model_idx] = {model_name: data}
-    #             else:
-    #                 print("Model not exist, appending..")
-    #                 existing_data.append({model_name: data})
-    #     else:
-    #         existing_data = [{model_name: data}]
-    #     with open(result_path, 'wb') as f:
-    #         pickle.dump(existing_data, f)
-    #     print(f"data saved to {result_path}..")
-    #     # create videos
-    #     video_folder = os.path.join("videos", model_name)
-    #     ensure_dir(video_folder)
-    #     for i, run_frames in enumerate(episode_frames):
-    #         video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            
-    #         self.save_video(run_frames, data[i], video_path)
+    def save_results(
+            self, 
+            data: np.ndarray,
+            episode_frames: Optional[List[List[np.ndarray]]] = None
+            ) -> None:        
+        args = self.args
+        ensure_dir(args.result_dir)
+        # load train config, and create result file path
+        train_config = OmegaConf.load(
+            os.path.join(args.ckpt_dir, '.hydra', 'config.yaml')
+            )
+        task_name = train_config.environment.base_env_kwargs.env        
+        result_path = os.path.join(args.result_dir, f"{task_name}.pkl")
+        # get model name and hyperparam
+        model_name = args.ckpt_dir.split('/')[1]
+        sweep_config = OmegaConf.load(
+            os.path.join(args.ckpt_dir, '.hydra', 'overrides.yaml')
+            )
+        for sweep_args in sweep_config:
+            model_name += f"-{sweep_args}"
+        print(model_name)
+        data = self._convert_save_data(data)        
+        if os.path.exists(result_path):
+            print(f"{result_path} alreadying exist, appending data..")
+            with open(result_path, 'rb') as f:
+                existing_data = pickle.load(f)
+                existing_models = [k for data in existing_data for k in data.keys()]
+                model_idx = existing_models.index(model_name) \
+                    if model_name in existing_models else None
+                # if same model&hyperparam is tested in the past, replace
+                if model_idx is not None:
+                    print("Model already exist, replacing..")
+                    existing_data[model_idx] = {model_name: data}
+                else:
+                    print("Model not exist, appending..")
+                    existing_data.append({model_name: data})
+        else:
+            existing_data = [{model_name: data}]
+        with open(result_path, 'wb') as f:
+            pickle.dump(existing_data, f)
+        print(f"data saved to {result_path}..")
+        # create videos
+        video_folder = os.path.join(args.result_dir, "videos", model_name)
+        ensure_dir(video_folder)
+        for i, run_frames in enumerate(episode_frames):
+            video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            
+            behavior_vis = self.get_behavior_vis(run_frames, data[i], video_path)
+            breakpoint()
 
-    # write a function to save list of frames to video
-    def save_video(
+    # write a function to combine frames and reward curve horizontally
+    def get_behavior_vis(
             self, 
             frames: List[np.ndarray], 
             rewards: Dict[str, List],
@@ -369,19 +379,19 @@ class TrainRunner:
         print(f"Saving video to {filename}..")        
         height = 500
         width = 300
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        video = cv2.VideoWriter(filename, fourcc, 30, (width*2, height))
+        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # video = cv2.VideoWriter(filename, fourcc, 30, (width*2, height))
+        combined_frames = []
         max_steps = len(frames)
-        for i, frame in enumerate(frames): 
-            reward_img = self.render_reward_curve(rewards, i, max_steps)
+        for i, frame in enumerate(frames):
+            reward_img = self.render_reward_curve(rewards, i, max_steps)            
             reward_img = cv2.resize(reward_img, (width, height), interpolation=cv2.INTER_AREA)
             reward_img.astype('uint8')
             frame = frame.astype('uint8')
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-            combined_frame = cv2.hconcat([frame, reward_img])
-            video.write(combined_frame)
-        cv2.destroyAllWindows()
-        video.release()
+            combined_frames.append(Image.fromarray(cv2.hconcat([frame, reward_img])))
+        return combined_frames
+
 
     def render_reward_curve(self, rewards_dict, cur_steps, max_steps):        
         """Render reward curve as an image"""
@@ -405,13 +415,13 @@ class TrainRunner:
         plt.close(fig)
         return image
 
-    def run(self) -> None:
+    def run(self) -> None:        
         if not self.args.exp_run.eval_only:
             self.train()                
             #self.eval()
-        else:
-            assert self.args.exp_run.ckpt_dir is not None, \
-                "ckpt_dir must be specified for eval_only"
+        else:        
+            assert self.args.ckpt_dir is not None, \
+                "ckpt_dir must be provided for eval_only"   
             self.eval()
 
 
