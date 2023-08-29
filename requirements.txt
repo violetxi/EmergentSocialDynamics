@@ -1,4 +1,5 @@
 gym==0.26.2
+protobuf==3.20.0
 matplotlib
 opencv-python
 pettingzoo[all]==1.23.0

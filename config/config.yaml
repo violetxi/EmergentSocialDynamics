@@ -22,7 +22,7 @@ wandb:
   project_name:  'emergent-social-dynamics'
 
 trainer:
-  max_epoch: 1000
+  max_epoch: 500
   step_per_epoch: 5000    # number of train steps per epoch  
   repeat_per_collect: 10    # number of policy learning per collect
   test_eps: 2
@@ -48,12 +48,12 @@ environment:
     beta: 0.0
   max_cycles: 2000    # this decides length of an episode
   render_mode: rgb_array
-  stack_num: 10
+  stack_num: 1    # this decides the number of observation stacked
   
 model: 
   name: ppo
   net:
-    in_channels: 10
+    in_channels: 1
     out_channels: 6
     kernel_size: 3
     stride: 1
