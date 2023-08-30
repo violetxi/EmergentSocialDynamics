@@ -50,7 +50,7 @@ environment:
     beta: 0.0
   max_cycles: 2000    # this decides length of an episode
   render_mode: rgb_array
-  stack_num: 16  #10    # this decides the number of observation stacked
+  stack_num: 10    # this decides the number of observation stacked
   
 model: 
   name: ppo_conv_stack

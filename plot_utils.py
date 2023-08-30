@@ -166,70 +166,70 @@ def plot_eval_metrics(result_path: str) -> None:
 
 
 
-# def plot_avg_return_with_std_error(result_path: str) -> None:
-#     # Define helper function to compute average return
-#     def compute_avg_return(data):
-#         # Prepare data for computing
-#         avg_returns = {}
-#         for run in data:
-#             for model, episodes in run.items():
-#                 if model not in avg_returns:
-#                     avg_returns[model] = {agent: [] for agent in episodes[0].keys()}
-#                 for episode in episodes:
-#                     for agent, rewards in episode.items():
-#                         avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
-#         # Calculate average return and standard error for each model
-#         for model, agents in avg_returns.items():
-#             for agent, rewards in agents.items():
-#                 avg_returns[model][agent] = (np.mean(rewards), np.std(rewards) / np.sqrt(len(rewards)))  # Average return and standard error
+def plot_avg_agent_return_with_std_error(result_path: str) -> None:
+    # Define helper function to compute average return
+    def compute_avg_return(data):
+        # Prepare data for computing
+        avg_returns = {}
+        for run in data:
+            for model, episodes in run.items():
+                if model not in avg_returns:
+                    avg_returns[model] = {agent: [] for agent in episodes[0].keys()}
+                for episode in episodes:
+                    for agent, rewards in episode.items():
+                        avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
+        # Calculate average return and standard error for each model
+        for model, agents in avg_returns.items():
+            for agent, rewards in agents.items():
+                avg_returns[model][agent] = (np.mean(rewards), np.std(rewards) / np.sqrt(len(rewards)))  # Average return and standard error
 
-#         return avg_returns
-#     # Load pickle files
-#     data = pickle.load(open(result_path, "rb"))
-#     data = compute_avg_return(data)
-#     # Convert the data to a DataFrame format
-#     df = pd.DataFrame([
-#         {'model': model, 'agent': agent, 'avg_reward': values[0], 'std_dev': values[1]}
-#         for model, agents in data.items()
-#         for agent, values in agents.items()
-#     ])
+        return avg_returns
+    # Load pickle files
+    data = pickle.load(open(result_path, "rb"))
+    data = compute_avg_return(data)
+    # Convert the data to a DataFrame format
+    df = pd.DataFrame([
+        {'model': model, 'agent': agent, 'avg_reward': values[0], 'std_dev': values[1]}
+        for model, agents in data.items()
+        for agent, values in agents.items()
+    ])
     
-#     # Determine unique agent counts across models
-#     agent_counts = df.groupby('model')['agent'].nunique().unique()    
-#     sns.set_palette("colorblind")    
-#     # Create subplots for each unique agent count    
-#     fig, axes = plt.subplots(1, len(agent_counts), figsize=(15 * len(agent_counts), 10))
-#     # Ensure axes is a list for consistency in indexing
-#     if len(agent_counts) == 1:
-#         axes = [axes]    
-#     for i, count in enumerate(agent_counts):
-#         # Filter data for models with the current agent count
-#         models_with_count = df[df['model'].isin(df.groupby('model').filter(lambda x: x['agent'].nunique() == count)['model'].unique())]        
-#         # Plot on the current subplot
-#         ax = sns.barplot(x="agent", y="avg_reward", hue="model", data=models_with_count, ax=axes[i], capsize=.1)        
-#         # Adding error bars
-#         for bar, err in zip(ax.patches, models_with_count['std_dev']):
-#             ax.errorbar(bar.get_x() + bar.get_width() / 2, bar.get_height(), yerr=err, color='black', capsize=3, fmt='none', zorder=3)
+    # Determine unique agent counts across models
+    agent_counts = df.groupby('model')['agent'].nunique().unique()    
+    sns.set_palette("colorblind")    
+    # Create subplots for each unique agent count    
+    fig, axes = plt.subplots(1, len(agent_counts), figsize=(15 * len(agent_counts), 10))
+    # Ensure axes is a list for consistency in indexing
+    if len(agent_counts) == 1:
+        axes = [axes]    
+    for i, count in enumerate(agent_counts):
+        # Filter data for models with the current agent count
+        models_with_count = df[df['model'].isin(df.groupby('model').filter(lambda x: x['agent'].nunique() == count)['model'].unique())]        
+        # Plot on the current subplot
+        ax = sns.barplot(x="agent", y="avg_reward", hue="model", data=models_with_count, ax=axes[i], capsize=.1)        
+        # Adding error bars
+        for bar, err in zip(ax.patches, models_with_count['std_dev']):
+            ax.errorbar(bar.get_x() + bar.get_width() / 2, bar.get_height(), yerr=err, color='black', capsize=3, fmt='none', zorder=3)
 
-#         axes[i].set_title(f"Average Return for Models with {count} Agents")
-#         axes[i].set_xlabel("Agent")
-#         axes[i].set_ylabel("Average Return per Episode")
-#         axes[i].legend(title="Model", prop={'size': 12}, title_fontsize='14')
+        axes[i].set_title(f"Average Return for Models with {count} Agents")
+        axes[i].set_xlabel("Agent")
+        axes[i].set_ylabel("Average Return per Episode")
+        axes[i].legend(title="Model", prop={'size': 12}, title_fontsize='14')
     
-#     sns.despine()
-#     plt.tight_layout()
-#     # Save the plot
-#     folder_name = os.path.dirname(result_path)
-#     filename = os.path.basename(result_path).split('.pkl')[0]
-#     fig_save_path = os.path.join(folder_name, f"{filename}.png")
-#     plt.savefig(fig_save_path)
-#     print(f"Plot saved to {fig_save_path}")
-#     plt.close()
+    sns.despine()
+    plt.tight_layout()
+    # Save the plot
+    folder_name = os.path.dirname(result_path)
+    filename = os.path.basename(result_path).split('.pkl')[0]
+    fig_save_path = os.path.join(folder_name, f"{filename}.png")
+    plt.savefig(fig_save_path)
+    print(f"Plot saved to {fig_save_path}")
+    plt.close()
 
 
 if __name__ == '__main__':
     cleanup_result_path = "results/cleanup_5agents.pkl"
     plot_avg_cumulative_rewards(cleanup_result_path)
     plot_eval_metrics(cleanup_result_path)
-    # plot_avg_return_with_std_error(cleanup_result_path)
+    # plot_avg_agent_return_with_std_error(cleanup_result_path)
         
