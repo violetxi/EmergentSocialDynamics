@@ -90,13 +90,17 @@ class ConvGRU(nn.Module):
         logits = self.fc(last_out)
         return logits, state
     
+
 class ConvGRUICM(ConvGRU):
     def __init__(self, config):
         super(ConvGRUICM, self).__init__(config)        
 
     # override forward method such that there is no state returned
     def forward(self, obs, state=None, info={}):
-        obs = obs.observation.curr_obs.cuda()        
+        if isinstance(obs, torch.Tensor):
+            obs = obs.cuda()
+        else:
+            obs = obs.observation.curr_obs.cuda()       
         # stacked inputs assuming images are grayscaled
         bs, ts, c, h, w = obs.shape
         processed_obs = []        

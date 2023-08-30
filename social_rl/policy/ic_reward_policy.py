@@ -99,7 +99,7 @@ class IMRewardPolicy(BasePolicy):
             rew_mse_loss=rew_mse_loss
             )
         # add forwrad and reward loss to reward
-        batch.rew += to_numpy((forward_mse_loss + rew_mse_loss) * self.reward_scale)
+        batch.rew += to_numpy((rew_mse_loss) * self.reward_scale)
         return self.policy.process_fn(batch, buffer, indices)
 
     def post_process_fn(

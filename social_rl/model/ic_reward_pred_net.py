@@ -48,12 +48,10 @@ class IMRewardModule(nn.Module):
             hidden_sizes=hidden_sizes,
             device=device
         )        
-        # predict reward given state and action given current state and predictd 
-        # other agents' actions         
-        # @TODO: currently assuming actions are scalar value for each agent, should
-        # try one-hot encoding for partially visible setting
+        # predict reward given state and action given current state and 
+        # other agents' actions
         self.reward_model = MLP(
-            feature_dim + num_other_agents,
+            feature_dim + num_other_agents * action_dim,
             output_dim=1,
             hidden_sizes=hidden_sizes,
             device=device
@@ -72,9 +70,7 @@ class IMRewardModule(nn.Module):
         **kwargs: Any
         ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Mapping: curr_obs, curr_act, next_obs -> mse_loss, pred_act."""
-        # features for current and next obs
-        curr_obs = to_torch(curr_obs, dtype=torch.float32, device=self.device)
-        next_obs = to_torch(next_obs, dtype=torch.float32, device=self.device)        
+        # features for current and next obs    
         phi1, phi2 = self.feature_net(curr_obs), self.feature_net(next_obs)
         # representation for state+action
         curr_act = to_torch(curr_act, dtype=torch.long, device=self.device)
@@ -85,7 +81,11 @@ class IMRewardModule(nn.Module):
         act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
         # reward prediction
         prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
+        bs, ts, n_agents = prev_other_act.shape
+        # only using last action not the history
+        prev_other_act = prev_other_act[:, -1, :]
+        prev_other_act_one_hot = F.one_hot(prev_other_act).reshape(bs, -1)
         rew = to_torch(rew, dtype=torch.float32, device=self.device).unsqueeze(1)
-        pred_rew = self.reward_model(torch.cat([phi1, prev_other_act], dim=1))
+        pred_rew = self.reward_model(torch.cat([phi1, prev_other_act_one_hot], dim=1))
         rew_mse_loss = 0.5 * F.mse_loss(pred_rew, rew, reduction="none").sum(1)
         return forward_mse_loss, rew_mse_loss, act_hat
