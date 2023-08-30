@@ -2,6 +2,7 @@ hydra:
   run:
     dir: outputs/${model.name}-${environment.base_env_kwargs.env}-${environment.base_env_kwargs.num_agents}_agents/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
+
 exp_run:
   seed: 1626
   # buffer size is multiplied by number of train envs in the vectorized environment
@@ -51,21 +52,27 @@ environment:
   render_mode: rgb_array
   stack_num: 10    # this decides the number of observation stacked
   
-model: 
-  name: ppo_conv_stack
+model:
+  name: icm_gru
   net:
     module_path: 'social_rl.model.core'
-    class_name: 'CNN'
-    in_channels: ${environment.stack_num}
+    class_name: 'ConvGRU'
+    in_channels: 1
     out_channels: 6
     kernel_size: 3
     stride: 1
     padding: 0
     bias: True
     flatten_dim: 1014
-    num_layers: 2
-    hidden_dim: 64
+    cnn_num_layers: 2
+    cnn_hidden_dim: 64
+    cnn_output_dim: 64    
+    rnn_input_size: 64
+    rnn_hidden_size: 128
+    rnn_num_layers: 2
+    rnn_batch_first: True
     output_dim: 64
+
 
   PPOPolicy:
     discount_factor: 0.99
@@ -81,3 +88,43 @@ model:
     advantage_normalization: 0
     recompute_advantage: 0
 
+  IMPolicy:
+    module_path: 'tianshou.policy'
+    class_name: 'ICMPolicy'
+    # world model configuration
+    world_model:
+      # path to the model class
+      module_path: 'tianshou.utils.net.discrete'
+      class_name: 'IntrinsicCuriosityModule'
+      # path to the arguments of the model class
+      args:
+        # encoder network to encode obs to latent state
+        feature_net:
+          module_path: 'social_rl.model.core'
+          class_name: 'ConvGRUICM'
+          config:
+            in_channels: 1
+            out_channels: 6
+            kernel_size: 3
+            stride: 1
+            padding: 0
+            bias: True
+            flatten_dim: 1014
+            cnn_num_layers: 2
+            cnn_hidden_dim: 64
+            cnn_output_dim: 64    
+            rnn_input_size: 64
+            rnn_hidden_size: 128
+            rnn_num_layers: 2
+            rnn_batch_first: True
+            output_dim: 64
+      # required args for world model
+      kwargs:
+        feature_dim: 64
+        action_dim: 9
+        hidden_sizes: [64, 64]
+    # world model based policy args
+    args:
+      lr_scale: 1.0
+      reward_scale: 1.0
+      forward_loss_weight: 1.0

@@ -282,8 +282,8 @@ class TrainRunner:
 
     def eval(self) -> None:
         args = self.args
-        assert args.result_dir is not None, \
-            "Please specify result_dir in config file"        
+        assert args.exp_run.result_dir is not None, \
+            "Please specify result_dir in config file or command line"        
         if args.exp_run.eval_only:            
             ckpts = glob.glob(f'{args.ckpt_dir}/*.pth')            
             agent_ckpts = {ckpt.split('-')[-1].split('.')[0]: ckpt for ckpt in ckpts}            
@@ -321,15 +321,18 @@ class TrainRunner:
             episode_frames: Optional[List[List[np.ndarray]]] = None
             ) -> None:        
         args = self.args
-        ensure_dir(args.result_dir)
+        ensure_dir(args.exp_run.result_dir)
         # load train config, and create result file path
         train_config = OmegaConf.load(
             os.path.join(args.ckpt_dir, '.hydra', 'config.yaml')
             )
-        task_name = train_config.environment.base_env_kwargs.env        
-        result_path = os.path.join(args.result_dir, f"{task_name}.pkl")
+        task_name = train_config.environment.base_env_kwargs.env
+        num_agents = train_config.environment.base_env_kwargs.num_agents
+        result_path = os.path.join(
+            args.exp_run.result_dir, f"{task_name}_{num_agents}agents.pkl"
+            )
         # get model name and hyperparam
-        model_name = args.ckpt_dir.split('/')[1]
+        model_name = args.model.name
         sweep_config = OmegaConf.load(
             os.path.join(args.ckpt_dir, '.hydra', 'overrides.yaml')
             )
@@ -356,42 +359,41 @@ class TrainRunner:
         with open(result_path, 'wb') as f:
             pickle.dump(existing_data, f)
         print(f"data saved to {result_path}..")
-        # create videos
-        video_folder = os.path.join(args.result_dir, "videos", model_name)
-        ensure_dir(video_folder)
-        for i, run_frames in enumerate(episode_frames):
-            video_path = os.path.join(video_folder, f"{model_name}-ep_{i}.mp4")            
-            behavior_vis = self.get_behavior_vis(run_frames, data[i], video_path)
-            breakpoint()
+        # create videos        
+        for i, run_frames in enumerate(episode_frames):            
+            video_folder = os.path.join(
+                args.exp_run.result_dir, 
+                "frames", 
+                f"{model_name}_ep{i}"
+                )
+            ensure_dir(video_folder)
+            self.save_behavior_vis(run_frames, data[i], video_folder)
 
-    # write a function to combine frames and reward curve horizontally
-    def get_behavior_vis(
+    # Combine frames and reward curve horizontally
+    def save_behavior_vis(
             self, 
             frames: List[np.ndarray], 
             rewards: Dict[str, List],
-            filename: str
+            video_folder: str
             ) -> None:
         """Save frames to video
         Args:
             frames: list of frames
-            filename: filename to save video to
-        """
-        print(f"Saving video to {filename}..")        
+            rewards: dict of rewards
+            video_folder: folder to save video
+        """        
         height = 500
         width = 300
-        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        # video = cv2.VideoWriter(filename, fourcc, 30, (width*2, height))
-        combined_frames = []
         max_steps = len(frames)
         for i, frame in enumerate(frames):
-            reward_img = self.render_reward_curve(rewards, i, max_steps)            
+            reward_img = self.render_reward_curve(rewards, i, max_steps)
             reward_img = cv2.resize(reward_img, (width, height), interpolation=cv2.INTER_AREA)
             reward_img.astype('uint8')
             frame = frame.astype('uint8')
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-            combined_frames.append(Image.fromarray(cv2.hconcat([frame, reward_img])))
-        return combined_frames
-
+            combined_frame = cv2.hconcat([frame, reward_img])
+            frame_path = os.path.join(video_folder, f"frame_{i}.png")
+            cv2.imwrite(frame_path, combined_frame)
 
     def render_reward_curve(self, rewards_dict, cur_steps, max_steps):        
         """Render reward curve as an image"""

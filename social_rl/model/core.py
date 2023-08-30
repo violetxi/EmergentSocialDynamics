@@ -89,3 +89,25 @@ class ConvGRU(nn.Module):
         last_out = out[:, -1, :]
         logits = self.fc(last_out)
         return logits, state
+    
+class ConvGRUICM(ConvGRU):
+    def __init__(self, config):
+        super(ConvGRUICM, self).__init__(config)        
+
+    # override forward method such that there is no state returned
+    def forward(self, obs, state=None, info={}):
+        obs = obs.observation.curr_obs.cuda()        
+        # stacked inputs assuming images are grayscaled
+        bs, ts, c, h, w = obs.shape
+        processed_obs = []        
+        for i in range(ts):
+            processed_obs.append(self.encoder(obs[:, i, :, :, :]))
+        processed_obs = torch.stack(processed_obs).permute(1, 0, 2)
+        if state is None:
+            state = torch.zeros((
+                self.gru.num_layers, bs, self.gru.hidden_size
+                )).cuda()        
+        out, state = self.gru(processed_obs, state)
+        last_out = out[:, -1, :]
+        logits = self.fc(last_out)
+        return logits

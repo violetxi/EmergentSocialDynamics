@@ -15,6 +15,7 @@ exp_run:
   ckpt_dir: null
   resume_training: False
   eval_only: False
+  result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
 
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
@@ -50,8 +51,8 @@ environment:
   render_mode: rgb_array
   stack_num: 10    # this decides the number of observation stacked
   
-model: 
-  name: ppo
+model:
+  name: ppo_gru
   net:
     module_path: 'social_rl.model.core'
     class_name: 'ConvGRU'

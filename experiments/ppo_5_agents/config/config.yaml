@@ -15,6 +15,7 @@ exp_run:
   ckpt_dir: null
   resume_training: False
   eval_only: False
+  result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
 
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
