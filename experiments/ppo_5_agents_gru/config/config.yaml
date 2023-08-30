@@ -27,7 +27,7 @@ trainer:
   step_per_epoch: 5000    # number of train steps per epoch  
   repeat_per_collect: 10    # number of policy learning per collect
   test_eps: 2
-  batch_size: 2048
+  batch_size: 1024
   # the following are divided by number of envs in the vectorized environment
   step_per_collect: 2000    # number of transitions collected for all train envs
   episode_per_collect: null    # non means use step_per_collect, vice versa
