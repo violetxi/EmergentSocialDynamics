@@ -16,6 +16,7 @@ exp_run:
   ckpt_dir: null
   resume_training: False
   eval_only: False
+  hyperparam_eval: False
   result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
 
 wandb:

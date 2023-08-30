@@ -280,12 +280,15 @@ class TrainRunner:
             pickle.dump(train_result, f)        
         print(f"\n========== Test Result during training==========\n{train_result}")
 
-    def eval(self) -> None:
+    def eval(
+            self,
+            ckpt_dir: str,
+            ) -> None:
         args = self.args
         assert args.exp_run.result_dir is not None, \
             "Please specify result_dir in config file or command line"        
-        if args.exp_run.eval_only:            
-            ckpts = glob.glob(f'{args.ckpt_dir}/*.pth')            
+        if args.exp_run.eval_only:                            
+            ckpts = glob.glob(f'{ckpt_dir}/*.pth')
             agent_ckpts = {ckpt.split('-')[-1].split('.')[0]: ckpt for ckpt in ckpts}            
             for agent_id, agent_policy in self.policy.policies.items():
                 agent_policy.load_state_dict(torch.load(agent_ckpts[agent_id]))
@@ -297,7 +300,7 @@ class TrainRunner:
             )
         step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
         frames = eval_result.pop('frames')        
-        self.save_results(step_agent_reward, frames)
+        self.save_results(step_agent_reward, frames, ckpt_dir)
         print(f"\n========== Eval after training ==========\n{eval_result}")
 
     def _convert_save_data(
@@ -318,13 +321,14 @@ class TrainRunner:
     def save_results(
             self, 
             data: np.ndarray,
-            episode_frames: Optional[List[List[np.ndarray]]] = None
+            episode_frames: Optional[List[List[np.ndarray]]] = None,
+            ckpt_dir: Optional[str] = None
             ) -> None:        
         args = self.args
         ensure_dir(args.exp_run.result_dir)
         # load train config, and create result file path
         train_config = OmegaConf.load(
-            os.path.join(args.ckpt_dir, '.hydra', 'config.yaml')
+            os.path.join(ckpt_dir, '.hydra', 'config.yaml')
             )
         task_name = train_config.environment.base_env_kwargs.env
         num_agents = train_config.environment.base_env_kwargs.num_agents
@@ -334,7 +338,7 @@ class TrainRunner:
         # get model name and hyperparam
         model_name = args.model.name
         sweep_config = OmegaConf.load(
-            os.path.join(args.ckpt_dir, '.hydra', 'overrides.yaml')
+            os.path.join(ckpt_dir, '.hydra', 'overrides.yaml')
             )
         for sweep_args in sweep_config:
             model_name += f"-{sweep_args}"
@@ -417,26 +421,15 @@ class TrainRunner:
         plt.close(fig)
         return image
 
-    def run(self) -> None:        
-        if not self.args.exp_run.eval_only:
+    def run(self) -> None:
+        if self.args.exp_run.hyperparam_eval:
+                # if evaluating hyper-parameters, run everything in output directory
+                breakpoint()
+                pass
+        elif not self.args.exp_run.eval_only:
             self.train()                
             #self.eval()
-        else:        
-            assert self.args.ckpt_dir is not None, \
+        else:                        
+            assert self.args.exp_run.ckpt_dir is not None, \
                 "ckpt_dir must be provided for eval_only"   
-            self.eval()
-
-
-# # version 1.2 doesn't change cwd to output
-# @hydra.main(config_path="config", config_name="config", version_base="1.2")
-# def main(args: DictConfig) -> None:
-#     # check for num_agents override for hyperparameter search
-#     num_agents_override = os.environ.get('NUM_AGENTS_OVERRIDE')
-#     if num_agents_override:
-#         args.environment.base_env_kwargs.num_agents = int(num_agents_override)
-#     train_runner = TrainRunner(args)
-#     train_runner.run()
-
-
-# if __name__ == "__main__":
-#     main()
+            self.eval(self.args.exp_run.ckpt_dir)

@@ -14,8 +14,13 @@ exp_run:
   # ckpt_dir can be provided when continue to train or only doing evaluation
   ckpt_dir: null
   resume_training: False
+  # eval one checkpoint
   eval_only: False
   result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
+  # eval checkpoints from many runs in a directory
+  hyperparam_eval: False
+  hyperparam_result_dir: ./hyperparam_results
+  
 
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
