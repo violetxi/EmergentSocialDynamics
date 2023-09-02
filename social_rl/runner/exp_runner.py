@@ -246,17 +246,17 @@ class TrainRunner:
         args = self.args
         # logger setup     
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")        
-        # wandb_run_name = f"{self.log_name}-{cur_time}"        
-        # logger = WandbLogger(
-        #     update_interval=args.wandb.update_interval,
-        #     save_interval=args.wandb.save_interval,
-        #     project=args.wandb.project_name,
-        #     name=wandb_run_name,
-        #     config=self.config,
-        #     )
-        # writer = SummaryWriter(self.output_dir)
-        # writer.add_text("args", str(args))
-        # logger.load(writer)
+        wandb_run_name = f"{self.log_name}-{cur_time}"        
+        logger = WandbLogger(
+            update_interval=args.wandb.update_interval,
+            save_interval=args.wandb.save_interval,
+            project=args.wandb.project_name,
+            name=wandb_run_name,
+            config=self.config,
+            )
+        writer = SummaryWriter(self.output_dir)
+        writer.add_text("args", str(args))
+        logger.load(writer)
         # run trainer
         train_result = onpolicy_trainer(
             policy=self.policy,
@@ -272,7 +272,7 @@ class TrainRunner:
             save_best_fn=self.save_best_fn,
             reward_metric=self.reward_metric,    # used in Collector                        
             stop_fn=self.stop_fn,
-            # logger=logger
+            logger=logger
             )
         # save training result
         train_result_save_path = os.path.join(self.output_dir, 'train_result.pkl')
