@@ -23,6 +23,7 @@ from social_rl.tianshou_elign.env import BaseVectorEnv
 from social_rl.tianshou_elign.env import BaseRewardLogger
 
 
+import psutil
 class Collector(object):
     """Collector enables the policy to interact with different types of envs with \
     exact number of steps or episodes.
@@ -170,7 +171,7 @@ class Collector(object):
     def reset_env(self, gym_reset_kwargs: Optional[Dict[str, Any]] = None) -> None:        
         """Reset all of the environments."""
         gym_reset_kwargs = gym_reset_kwargs if gym_reset_kwargs else {}
-        obs, info = self.env.reset(**gym_reset_kwargs)
+        obs, info = self.env.reset(**gym_reset_kwargs)                
         if self.preprocess_fn:
             obs = self.preprocess_fn(obs=obs)
 
@@ -310,8 +311,12 @@ class Collector(object):
             else:
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
-                        # self.data.obs will be used by agent to get result
+                        # self.data.obs will be used by agent to get result                        
+                        cpu_percent_start = psutil.cpu_percent(interval=None)
                         result = self.policy(self.data, last_state)
+                        cpu_percent_end = psutil.cpu_percent(interval=None)
+                        avg_cpu = (cpu_percent_start + cpu_percent_end) / 2
+                        #print(f"Average CPU usage during self.policy: {avg_cpu}")
                 else:
                     result = self.policy(self.data, last_state)
                 # update state / policy into self.data
@@ -334,7 +339,7 @@ class Collector(object):
             # get bounded and remapped actions first (not saved into buffer)
             # only processed if self.action_scaling it True
             action_remap = self.policy.map_action(self.data.act)
-            # step in env, output shape: (num_ep, num_agents)
+            # step in env, output shape: (num_ep, num_agents)            
             obs_next, rew, terminated, truncated, info = self.env.step(
                 action_remap,  # type: ignore
                 ready_env_ids

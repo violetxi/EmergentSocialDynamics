@@ -124,9 +124,9 @@ def plot_eval_metrics(result_path: str) -> None:
 
     # Plotting using Seaborn
     sns.set_palette("colorblind")
-    rotation = 15
-    horizontal_alignment = 'center'
-    fig, axs = plt.subplots(1, 2, figsize=(15, 7))
+    rotation = 90
+    horizontal_alignment = 'left'
+    fig, axs = plt.subplots(1, 2, figsize=(15, 10))
     # Subplot 1: Average total population return with standard error
     sns.barplot(
         x=formatted_model_names, 

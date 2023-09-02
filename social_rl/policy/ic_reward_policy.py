@@ -9,6 +9,7 @@ from tianshou.policy import BasePolicy
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule
 
 
+import psutil
 class IMRewardPolicy(BasePolicy):
     """Implementation of Intrinsic Curiosity Module. arXiv:1705.05363.
 
@@ -83,7 +84,7 @@ class IMRewardPolicy(BasePolicy):
         """Pre-process the data from the provided replay buffer.
 
         Used in :meth:`update`. Check out :ref:`process_fn` for more information.
-        """        
+        """
         curr_obs = batch.obs.observation.curr_obs
         curr_act = batch.act
         next_obs = batch.obs_next.observation.curr_obs

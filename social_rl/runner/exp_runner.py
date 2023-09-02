@@ -36,7 +36,6 @@ from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
 from social_rl.utils.loggers.wandb_logger import WandbLogger
 from social_rl.utils.utils import ensure_dir
 
-import hydra
 from hydra.utils import get_original_cwd
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import (
@@ -57,12 +56,12 @@ class TrainRunner:
             ) -> None:        
         self.args = args
         self.train_step_agent_rews = None
-        self.eval_step_agent_rews = None
-        self._load_config()
-        self._setup_env()
+        self.eval_step_agent_rews = None        
+        self._load_config()        
+        self._setup_env()        
         self.set_seed()
-        self._setup_agents()
-        self._setup_collectors()                
+        self._setup_agents()        
+        self._setup_collectors()        
 
     def set_seed(self) -> None:
         # @TODO: allow automatically generating seeds for N test and M train envs
@@ -113,8 +112,8 @@ class TrainRunner:
         net = feature_net_cls(self.net_config)
         device = self.args.exp_run.device
         action_shape = self.action_space.n
-        actor = Actor(net, action_shape, device=device).to(device)
-        critic = Critic(net, device=device).to(device)
+        actor = Actor(net, action_shape, device=device)
+        critic = Critic(net, device=device)
         actor_critic = ActorCritic(actor, critic)
         # orthogonal initialization
         for m in actor_critic.modules():
@@ -133,7 +132,7 @@ class TrainRunner:
                 optim=optim,
                 dist_fn=dist,
                 **self.policy_config
-            )            
+            )         
             feature_net_module = import_module(
                 self.impolicy_config['world_model']['args']['feature_net']['module_path']
                 )
@@ -155,7 +154,7 @@ class TrainRunner:
                 **self.impolicy_config['world_model']['kwargs'],
                 device=device,
                 )
-            im_model = im_model.to(device)  
+            im_model = im_model
             im_wm_optim = torch.optim.Adam(
                 im_model.parameters(),
                 lr=self.args.agent.optim.wm_lr
@@ -172,7 +171,7 @@ class TrainRunner:
                 model=im_model,
                 optim=im_wm_optim,
                 **self.impolicy_config['args']
-                ) 
+                ).cuda()            
         else:
             policy = PPOPolicy(
                 actor=actor,
@@ -180,7 +179,8 @@ class TrainRunner:
                 optim=optim,
                 dist_fn=dist,
                 **self.policy_config
-            )
+            ).cuda()
+
         return policy
 
     def _setup_agents(self) -> None:
@@ -206,7 +206,7 @@ class TrainRunner:
                     processed_ob = transform(ob).unsqueeze(0)
                 else:
                     processed_ob = torch.stack([transform(ob_i) for ob_i in ob])
-                agent_ob['observation']['curr_obs'] = processed_ob                
+                agent_ob['observation']['curr_obs'] = processed_ob.pin_memory()             
         return obs
 
     def _setup_collectors(self) -> None:
@@ -246,17 +246,17 @@ class TrainRunner:
         args = self.args
         # logger setup     
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")        
-        wandb_run_name = f"{self.log_name}-{cur_time}"        
-        logger = WandbLogger(
-            update_interval=args.wandb.update_interval,
-            save_interval=args.wandb.save_interval,
-            project=args.wandb.project_name,
-            name=wandb_run_name,
-            config=self.config,
-            )
-        writer = SummaryWriter(self.output_dir)
-        writer.add_text("args", str(args))
-        logger.load(writer)
+        # wandb_run_name = f"{self.log_name}-{cur_time}"        
+        # logger = WandbLogger(
+        #     update_interval=args.wandb.update_interval,
+        #     save_interval=args.wandb.save_interval,
+        #     project=args.wandb.project_name,
+        #     name=wandb_run_name,
+        #     config=self.config,
+        #     )
+        # writer = SummaryWriter(self.output_dir)
+        # writer.add_text("args", str(args))
+        # logger.load(writer)
         # run trainer
         train_result = onpolicy_trainer(
             policy=self.policy,
@@ -272,7 +272,7 @@ class TrainRunner:
             save_best_fn=self.save_best_fn,
             reward_metric=self.reward_metric,    # used in Collector                        
             stop_fn=self.stop_fn,
-            logger=logger
+            # logger=logger
             )
         # save training result
         train_result_save_path = os.path.join(self.output_dir, 'train_result.pkl')
