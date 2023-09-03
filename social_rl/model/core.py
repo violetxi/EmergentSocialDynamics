@@ -78,8 +78,13 @@ class ConvGRU(nn.Module):
         self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
         self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
 
-    def forward(self, obs, state=None, info={}):        
-        obs = obs.observation.curr_obs.cuda(non_blocking=True)        
+    def forward(self, obs, state=None, info={}):
+        # import psutil
+        # cput_percent = psutil.cpu_percent()        
+        # print(f"Moving from cpu to cuda CPU percent: {cput_percent}")
+        obs = obs.observation.curr_obs.cuda(non_blocking=True)
+        # cput_percent = psutil.cpu_percent()
+        # print(f"After moving from cpu to cuda CPU percent: {cput_percent}")
         # stacked inputs assuming images are grayscaled        
         bs, ts, c, h, w = obs.shape
         processed_obs = []

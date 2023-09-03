@@ -25,12 +25,12 @@ from torchvision.transforms import (
 # to supress tensorboard pkg_resources deprecated warnings
 from tianshou.data import VectorReplayBuffer
 from tianshou.policy import PPOPolicy
-from tianshou.trainer import onpolicy_trainer
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 
 from social_rl.tianshou_elign.data import Collector
 from social_rl.tianshou_elign.env import VectorEnv
+from social_rl.tianshou_elign.trainer.onpolicy import onpolicy_trainer
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
 from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
 from social_rl.utils.loggers.wandb_logger import WandbLogger
@@ -244,7 +244,7 @@ class TrainRunner:
     
     def train(self) -> None:
         args = self.args
-        # logger setup     
+        # logger setup
         cur_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")        
         wandb_run_name = f"{self.log_name}-{cur_time}"        
         logger = WandbLogger(

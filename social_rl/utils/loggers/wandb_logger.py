@@ -12,7 +12,9 @@ import wandb
 
 
 class WandbLogger:
-    """Weights and Biases logger that sends data to https://wandb.ai/.
+    """ @TODO Cite the original source
+    Adpated from TianShou's WandbLogger class to log to wandb.ai
+    Weights and Biases logger that sends data to https://wandb.ai/.
 
     This logger creates three panels with plots: train, test, and update.
     Make sure to select the correct access for each panel in weights and biases:
@@ -120,7 +122,7 @@ class WandbLogger:
         :param int step: stands for the timestep the collect_result being logged.
         """
         assert collect_result["n/ep"] > 0
-        if step - self.last_log_test_step >= self.test_interval:
+        if step - self.last_log_test_step >= self.test_interval:            
             log_data = {
                 "test/env_step": step,
                 "test/reward": collect_result["rew"],

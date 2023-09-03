@@ -439,7 +439,7 @@ class Collector(object):
                 policy={}
             )
             self.reset_env()
-
+        
         if episode_count > 0:
             rews, lens, idxs = list(
                 map(
@@ -467,5 +467,5 @@ class Collector(object):
         }
         # store rendered frames
         if render_mode == "rgb_array":
-            output["frames"] = frames
+            output["frames"] = frames        
         return output
