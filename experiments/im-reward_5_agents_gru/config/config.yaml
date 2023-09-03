@@ -9,20 +9,18 @@ exp_run:
   buffer_size: 20_000
   # number of train and test envs in the vectorized environment
   train_env_num: 10
-  test_env_num: 2
+  test_env_num: 1
   logdir: 'logs'
   device: 'cuda'
   # ckpt_dir can be provided when continue to train or only doing evaluation
   ckpt_dir: null
-  resume_training: False
   eval_only: False
-  hyperparam_eval: False
   result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
 
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
   save_interval: 1
-  project_name: 'emergent-social-dynamics'
+  project_name: 'esd'
 
 trainer:
   max_epoch: 500

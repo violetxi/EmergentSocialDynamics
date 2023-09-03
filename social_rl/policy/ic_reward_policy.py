@@ -9,7 +9,6 @@ from tianshou.policy import BasePolicy
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule
 
 
-import psutil
 class IMRewardPolicy(BasePolicy):
     """Implementation of Intrinsic Curiosity Module. arXiv:1705.05363.
 
