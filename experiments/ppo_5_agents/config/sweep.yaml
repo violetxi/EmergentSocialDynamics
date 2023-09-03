@@ -2,7 +2,7 @@ program: main.py
 method: bayes # or 'random', 'grid' based on your preference
 
 metric:
-  name: test/reward # or any metric you are logging and want to optimize
+  name: test/best_reward # or any metric you are logging and want to optimize
   goal: maximize # or 'maximize' based on the metric
 
 parameters:

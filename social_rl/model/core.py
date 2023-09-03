@@ -19,13 +19,8 @@ class CNN(nn.Module):
         self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
         self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
 
-    def forward(self, obs, state=None, info={}):
-        import psutil
-        cput_percent = psutil.cpu_percent()
-        print(f"Moving from cpu to cuda CPU percent: {cput_percent}")
-        process_obs = obs.observation.curr_obs.cuda()
-        cput_percent = psutil.cpu_percent()
-        print(f"After moving from cpu to cuda CPU percent: {cput_percent}")
+    def forward(self, obs, state=None, info={}):        
+        process_obs = obs.observation.curr_obs.cuda()        
         if len(process_obs.shape) == 5:
             # stacked inputs assuming images are grayscaled
             bs, ts, c, h, w = process_obs.shape
@@ -78,18 +73,11 @@ class ConvGRU(nn.Module):
         self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
         self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
 
-    def forward(self, obs, state=None, info={}):
-        # import psutil
-        # cput_percent = psutil.cpu_percent()        
-        # print(f"Moving from cpu to cuda CPU percent: {cput_percent}")
-        obs = obs.observation.curr_obs.cuda(non_blocking=True)
-        # cput_percent = psutil.cpu_percent()
-        # print(f"After moving from cpu to cuda CPU percent: {cput_percent}")
+    def forward(self, obs, state=None, info={}):        
+        obs = obs.observation.curr_obs.cuda(non_blocking=True)    
         # stacked inputs assuming images are grayscaled        
         bs, ts, c, h, w = obs.shape
         processed_obs = []
-        # if bs > 100:
-        #     breakpoint()
         for i in range(ts):            
             processed_obs.append(self.encoder(obs[:, i, :, :, :]))            
         processed_obs = torch.stack(processed_obs).permute(1, 0, 2)

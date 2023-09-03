@@ -8,8 +8,7 @@ exp_run:
   buffer_size: 20_000
   # number of train and test envs in the vectorized environment
   train_env_num: 10
-  test_env_num: 2
-  logdir: 'logs'
+  test_env_num: 2  
   device: 'cuda'
   # ckpt_dir can be provided when continue to train or only doing evaluation
   ckpt_dir: null
@@ -17,21 +16,17 @@ exp_run:
   # eval one checkpoint
   eval_only: False
   result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
-  # eval checkpoints from many runs in a directory
-  hyperparam_eval: False
-  hyperparam_result_dir: ./hyperparam_results
-  
 
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
   save_interval: 1
-  project_name:  'emergent-social-dynamics'
+  project_name:  'esd-regular'
 
 trainer:
   max_epoch: 500
   step_per_epoch: 5000    # number of train steps per epoch  
   repeat_per_collect: 10    # number of policy learning per collect
-  test_eps: 2
+  test_eps: 6
   batch_size: 2048
   # the following are divided by number of envs in the vectorized environment
   step_per_collect: 2000    # number of transitions collected for all train envs
@@ -85,4 +80,3 @@ model:
     deterministic_eval: True
     advantage_normalization: 0
     recompute_advantage: 0
-

@@ -63,15 +63,19 @@ class TrainRunner:
         self._setup_agents()        
         self._setup_collectors()        
 
-    def set_seed(self) -> None:
-        # @TODO: allow automatically generating seeds for N test and M train envs
+    def set_seed(self) -> None:        
         seed = self.args.exp_run.seed
         np.random.seed(seed)
         torch.manual_seed(seed)
         if self.args.exp_run.device == 'cuda':
             torch.cuda.manual_seed(seed)
-        #self.train_envs.seed()
-        #self.test_envs.seed(seed)
+        train_env_seeds = list(range(seed, seed + self.args.exp_run.train_env_num))
+        self.train_envs.seed(train_env_seeds)                
+        test_env_seeds = list(range(
+            seed + self.args.exp_run.train_env_num, 
+            seed + self.args.exp_run.train_env_num + self.args.exp_run.test_env_num
+            ))
+        self.test_envs.seed(test_env_seeds)        
 
     def _load_config(self) -> None:
         hydra_cfg = HydraConfig.get()
@@ -282,12 +286,12 @@ class TrainRunner:
 
     def eval(
             self,
-            ckpt_dir: str,
+            ckpt_dir: Optional[str],
             ) -> None:
         args = self.args
         assert args.exp_run.result_dir is not None, \
             "Please specify result_dir in config file or command line"        
-        if args.exp_run.eval_only:                            
+        if args.exp_run.eval_only:                     
             ckpts = glob.glob(f'{ckpt_dir}/*.pth')
             agent_ckpts = {ckpt.split('-')[-1].split('.')[0]: ckpt for ckpt in ckpts}            
             for agent_id, agent_policy in self.policy.policies.items():
@@ -421,14 +425,9 @@ class TrainRunner:
         plt.close(fig)
         return image
 
-    def run(self) -> None:
-        if self.args.exp_run.hyperparam_eval:
-                # if evaluating hyper-parameters, run everything in output directory
-                breakpoint()
-                pass
-        elif not self.args.exp_run.eval_only:
-            self.train()                
-            #self.eval()
+    def run(self) -> None:        
+        if not self.args.exp_run.eval_only:
+            self.train()
         else:                        
             assert self.args.exp_run.ckpt_dir is not None, \
                 "ckpt_dir must be provided for eval_only"   
