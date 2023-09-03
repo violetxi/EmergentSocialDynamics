@@ -244,9 +244,8 @@ class BaseTrainer(ABC):
             # log best reward as we save models based on it, and tune hyper-parameters for it
             log_data = {
                 "test/best_reward": self.best_reward, 
-                "test/best_reward_std": self.best_reward_std,
-                "test/best_epoch": self.best_epoch
-                }
+                "test/best_reward_std": self.best_reward_std,                
+                }            
             self.logger.write("test/env_step", self.best_epoch, log_data)
         if self.save_best_fn:
             self.save_best_fn(self.policy)
@@ -357,6 +356,13 @@ class BaseTrainer(ABC):
             self.best_epoch = self.epoch
             self.best_reward = float(rew)
             self.best_reward_std = rew_std
+            # log best reward as we save models based on it, and tune hyper-parameters for it
+            log_data = {
+                "test/best_reward": self.best_reward, 
+                "test/best_reward_std": self.best_reward_std,                
+                }            
+            self.logger.write("test/env_step", self.best_epoch, log_data)
+
             if self.save_best_fn:
                 self.save_best_fn(self.policy)
         if self.verbose:
@@ -376,6 +382,10 @@ class BaseTrainer(ABC):
             }
         else:
             test_stat = {}
+
+        # if no improvement after 25 epochs, stop training
+        if self.epoch - self.best_epoch > 25:
+            stop_fn_flag = True
         if self.stop_fn and self.stop_fn(self.best_reward):
             stop_fn_flag = True
 

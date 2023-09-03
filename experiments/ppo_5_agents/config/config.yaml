@@ -20,7 +20,7 @@ exp_run:
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
   save_interval: 1
-  project_name:  'esd-regular'
+  project_name:  'esd'
 
 trainer:
   max_epoch: 500
