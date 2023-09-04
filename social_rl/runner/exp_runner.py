@@ -28,8 +28,8 @@ from tianshou.policy import PPOPolicy
 from tianshou.utils.net.common import ActorCritic
 from tianshou.utils.net.discrete import Actor, Critic
 
-from social_rl.tianshou_elign.data import Collector
-from social_rl.tianshou_elign.env import VectorEnv
+from social_rl.tianshou_elign.data.collector import Collector
+from social_rl.tianshou_elign.env.vecenv import VectorEnv
 from social_rl.tianshou_elign.trainer.onpolicy import onpolicy_trainer
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
 from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager

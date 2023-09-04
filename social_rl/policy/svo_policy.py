@@ -33,8 +33,7 @@ class SVOPolicy(BasePolicy):
         super().__init__(**kwargs)
         self.policy = policy
         assert svo != -1, "svo must be set"
-        self.svo = svo.pop()        
-        print(f"setting svo to {self.svo}")
+        self.svo = svo.pop()
         self.reward_scale = reward_scale
 
     def train(

@@ -18,9 +18,9 @@ from tianshou.data import (
 from tianshou.data.batch import _alloc_by_keys_diff
 from tianshou.policy import BasePolicy
 # customized tianshou
-from social_rl.tianshou_elign.utils import MovAvg, VecMovAvg, VecTotal
-from social_rl.tianshou_elign.env import BaseVectorEnv
-from social_rl.tianshou_elign.env import BaseRewardLogger
+from social_rl.tianshou_elign.utils.moving_average import MovAvg, VecMovAvg, VecTotal
+from social_rl.tianshou_elign.env.vecenv import BaseVectorEnv
+from social_rl.tianshou_elign.env.utils import BaseRewardLogger
 
 
 import psutil
