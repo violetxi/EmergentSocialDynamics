@@ -37,7 +37,7 @@ trainer:
 agent:
   optim:
     ppo_lr: 1e-4    # every model uses PPO
-    wm_lr: 1e-4    # only some models will use this
+    wm_lr: 1e-4    # this model doesn't use but have it as placeholder
 
 environment:
   base_env_kwargs:
