@@ -65,8 +65,6 @@ class MultiAgentPolicyManager(BasePolicy):
             like np.ndarray or dictionary, which are used agent_id or agent_idx to identify. TianShou's 
             indice is expecting global index in the Batch object, therefore in our case they just use all 
             the indices in a batch.**
-            
-        
         """        
         # reward can be empty Batch (after initial reset) or nparray.
         has_rew = isinstance(buffer.rew, np.ndarray)        
@@ -174,18 +172,26 @@ class MultiAgentPolicyManager(BasePolicy):
                 else:
                     if k in ['obs', 'obs_next']:
                         tmp_batch_dict[k] = v.get(agent_id)
+                        # add other agent's reward to the batch
+                        if policy.__class__.__name__ == 'SVOPolicy':
+                            if len(batch.rew.shape) > 0:
+                                other_rews = np.hstack((
+                                    batch['rew'][:, :agent_idx], 
+                                    batch['rew'][:, agent_idx+1:]
+                                    ))
+                                tmp_batch_dict[k]['observation']['other_rews'] = other_rews
                     else:
                         if k in ['done', 'terminated', 'truncated', 'info', 'policy']:
                             tmp_batch_dict[k] = v
-                        else:                                                        
+                        else:                                                                                    
                             tmp_batch_dict[k] = v[:, agent_idx]
 
-            tmp_batch = Batch(tmp_batch_dict)                        
+            tmp_batch = Batch(tmp_batch_dict)
             out = policy(
                 batch=tmp_batch,
                 state=None if state is None else state[agent_id],
                 **kwargs
-            )            
+            )
             act = out.act
             each_state = out.state \
                 if (hasattr(out, "state") and out.state is not None) \

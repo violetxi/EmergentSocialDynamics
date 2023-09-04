@@ -87,11 +87,16 @@ class TrainRunner:
         self.env_config = self.config['environment']        
         self.net_config = self.config['model']['net']
         self.policy_config = self.config['model']['PPOPolicy']
-        if 'IMPolicy' in self.config['model']:
+        if 'IMPolicy' in self.config['model']:            
             self.impolicy_config = self.config['model']['IMPolicy']
-            self.model_based = True
+            self.im_policy = True
+            if 'world_model' in self.config['model']['IMPolicy']:                
+                self.model_based = True
+            else:                
+                self.model_based = False
         else:
             self.model_based = False
+            self.im_policy = False
 
     def _setup_env(self) -> None:        
         # this is just a dummpy for setting up other things later
@@ -128,55 +133,74 @@ class TrainRunner:
             actor_critic.parameters(), 
             lr=self.args.agent.optim.ppo_lr
             )
-        dist = torch.distributions.Categorical        
-        if self.model_based:
+        dist = torch.distributions.Categorical
+        # setup policy using intrinsic motivation
+        if self.im_policy:
+            # base policy optimization
             ppo = PPOPolicy(
-                actor=actor,
-                critic=critic,
-                optim=optim,
-                dist_fn=dist,
-                **self.policy_config
-            )         
-            feature_net_module = import_module(
-                self.impolicy_config['world_model']['args']['feature_net']['module_path']
+                    actor=actor,
+                    critic=critic,
+                    optim=optim,
+                    dist_fn=dist,
+                    **self.policy_config
+                )            
+            # world model based IM policy
+            if self.model_based:
+                # from pixel to feature space
+                feature_net_module = import_module(
+                    self.impolicy_config['world_model']['args']['feature_net']['module_path']
+                    )
+                feature_net_cls = getattr(
+                    feature_net_module, 
+                    self.impolicy_config['world_model']['args']['feature_net']['class_name']
+                    )
+                feature_net_config = self.impolicy_config['world_model']['args']['feature_net']['config']
+                feature_net = feature_net_cls(feature_net_config).to(device)
+                wm_module = import_module(
+                    self.impolicy_config['world_model']['module_path']
+                    )
+                wm_cls = getattr(
+                    wm_module,
+                    self.impolicy_config['world_model']['class_name']
                 )
-            feature_net_cls = getattr(
-                feature_net_module, 
-                self.impolicy_config['world_model']['args']['feature_net']['class_name']
-                )
-            feature_net_config = self.impolicy_config['world_model']['args']['feature_net']['config']
-            feature_net = feature_net_cls(feature_net_config).to(device)
-            wm_module = import_module(
-                self.impolicy_config['world_model']['module_path']
-                )
-            wm_cls = getattr(
-                wm_module,
-                self.impolicy_config['world_model']['class_name']
-            )
-            im_model = wm_cls(
-                feature_net=feature_net,
-                **self.impolicy_config['world_model']['kwargs'],
-                device=device,
-                )
-            im_model = im_model
-            im_wm_optim = torch.optim.Adam(
-                im_model.parameters(),
-                lr=self.args.agent.optim.wm_lr
-                )
-            policy_module = import_module(
-                self.impolicy_config['module_path']
-                )
-            policy_cls = getattr(
-                policy_module,
-                self.impolicy_config['class_name']
-                )
-            policy = policy_cls(
-                policy=ppo,
-                model=im_model,
-                optim=im_wm_optim,
-                **self.impolicy_config['args']
-                ).cuda()            
+                im_model = wm_cls(
+                    feature_net=feature_net,
+                    **self.impolicy_config['world_model']['kwargs'],
+                    device=device,
+                    )
+                im_model = im_model
+                im_wm_optim = torch.optim.Adam(
+                    im_model.parameters(),
+                    lr=self.args.agent.optim.wm_lr
+                    )
+                policy_module = import_module(
+                    self.impolicy_config['module_path']
+                    )
+                policy_cls = getattr(
+                    policy_module,
+                    self.impolicy_config['class_name']
+                    )
+                policy = policy_cls(
+                    policy=ppo,
+                    model=im_model,
+                    optim=im_wm_optim,
+                    **self.impolicy_config['args']
+                    ).cuda()
+            else:                
+                # module free IM policy
+                policy_module = import_module(
+                    self.impolicy_config['module_path']
+                    )
+                policy_cls = getattr(
+                    policy_module,
+                    self.impolicy_config['class_name']
+                    )
+                policy = policy_cls(
+                    policy=ppo,
+                    **self.impolicy_config['args']
+                    ).cuda()
         else:
+            # model free non-IM policy        
             policy = PPOPolicy(
                 actor=actor,
                 critic=critic,
