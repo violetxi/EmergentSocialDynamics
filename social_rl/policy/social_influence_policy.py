@@ -145,6 +145,7 @@ class SocialInfluencePolicy(BasePolicy):
         # state reset happens for every batch
         moa_loss = self.model(curr_obs, prev_act, other_act) * self.lr_scale
         moa_loss.backward()
+        self.optim.step()
         res.update(
             {"moa_loss": moa_loss.item()}
         )
