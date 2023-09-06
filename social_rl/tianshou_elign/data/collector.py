@@ -180,6 +180,13 @@ class Collector(object):
 
     def _reset_state(self, id: Union[int, List[int]]) -> None:
         """Reset the hidden state: self.data.state[id]."""
+        for agent_id, policy in self.policy.policies.items():
+            if hasattr(policy, "actor"):                
+                # PPO base policy 
+                policy.actor.preprocess.state = None        
+            else:
+                # other IM policies wrapped PPO
+                policy.policy.actor.preprocess.state = None
         if hasattr(self.data.policy, "hidden_state"):
             state = self.data.policy.hidden_state  # it is a reference
             if isinstance(state, torch.Tensor):
@@ -311,12 +318,8 @@ class Collector(object):
             else:
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
-                        # self.data.obs will be used by agent to get result                        
-                        cpu_percent_start = psutil.cpu_percent(interval=None)
-                        result = self.policy(self.data, last_state)
-                        cpu_percent_end = psutil.cpu_percent(interval=None)
-                        avg_cpu = (cpu_percent_start + cpu_percent_end) / 2
-                        #print(f"Average CPU usage during self.policy: {avg_cpu}")
+                        # self.data.obs will be used by agent to get result
+                        result = self.policy(self.data, last_state)                        
                 else:
                     result = self.policy(self.data, last_state)
                 # update state / policy into self.data
@@ -325,8 +328,7 @@ class Collector(object):
                 state = result.get("state", None)
                 if state is not None:
                     policy.hidden_state = state  # save state into buffer
-                # update action for multi-agent into self.data 
-                
+                # update action for multi-agent into self.data                 
                 act = []
                 for k, v in result.items():
                     act.append(v.act)

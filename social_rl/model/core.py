@@ -72,31 +72,54 @@ class ConvGRU(nn.Module):
         self.fc = nn.Linear(config['rnn_hidden_size'], config['output_dim'])
         self.dist_mean = nn.Linear(config['output_dim'], config['output_dim'])
         self.dist_std = nn.Linear(config['output_dim'], config['output_dim'])
+        # to keep track of its hidden state
+        self.state = None
 
-    def forward(self, obs, state=None, info={}):        
+    def forward(self, obs, state=None):
+        # state is the initial hidden state
         obs = obs.observation.curr_obs.cuda(non_blocking=True)    
         # stacked inputs assuming images are grayscaled        
         bs, ts, c, h, w = obs.shape
         processed_obs = []
-        for i in range(ts):            
+        for i in range(ts):       
             processed_obs.append(self.encoder(obs[:, i, :, :, :]))            
         processed_obs = torch.stack(processed_obs).permute(1, 0, 2)
-        if state is None:
-            state = torch.zeros((
-                self.gru.num_layers, bs, self.gru.hidden_size
-                )).cuda()        
-        out, state = self.gru(processed_obs, state)
+        # during batch training, uses reset state every time
+        if bs > 50:
+            if state is None:
+                state = torch.zeros((
+                    self.gru.num_layers, bs, self.gru.hidden_size
+                    )).cuda()
+            out, state = self.gru(processed_obs, state)
+        else:
+            # during data collection, use state with past history
+            if self.state is None:                
+                self.state = torch.zeros((
+                    self.gru.num_layers, bs, self.gru.hidden_size
+                    )).cuda()
+            out, self.state = self.gru(processed_obs, self.state)
+
+        # else:
+        #     if self.state.shape[1] != bs:
+        #         state = torch.zeros((
+        #             self.gru.num_layers, bs, self.gru.hidden_size
+        #             )).cuda()
+        #         out, state = self.gru(processed_obs, state)
+        #     else:
+        #         out, state = self.gru(processed_obs, self.state)
+        # self.state = state.detach()
         last_out = out[:, -1, :]
         logits = self.fc(last_out)
-        return logits, state
+        return logits, self.state
     
 
 class ConvGRUICM(ConvGRU):
     def __init__(self, config):
         super(ConvGRUICM, self).__init__(config)        
 
-    # override forward method such that there is no state returned
+    # override forward method such that there is no state returned    
     def forward(self, obs, state=None, info={}):
+        # state is the initial hidden state
         if isinstance(obs, torch.Tensor):
             obs = obs.cuda()
         else:
@@ -107,11 +130,16 @@ class ConvGRUICM(ConvGRU):
         for i in range(ts):
             processed_obs.append(self.encoder(obs[:, i, :, :, :]))
         processed_obs = torch.stack(processed_obs).permute(1, 0, 2)
-        if state is None:
-            state = torch.zeros((
-                self.gru.num_layers, bs, self.gru.hidden_size
-                )).cuda()        
-        out, state = self.gru(processed_obs, state)
+            
+        if self.state is None:
+            if state is None:
+                state = torch.zeros((
+                    self.gru.num_layers, bs, self.gru.hidden_size
+                    )).cuda()
+            out, state = self.gru(processed_obs, state)
+        else:
+            out, state = self.gru(processed_obs, self.state)
+        self.state = state
         last_out = out[:, -1, :]
         logits = self.fc(last_out)
         return logits

@@ -88,8 +88,8 @@ class SVOPolicy(BasePolicy):
         # compute current SVO
         epsilon = 1e-10
         mean_other_rew = batch.obs.observation.other_rews.mean(axis=1)
-        svo_hat = np.degrees(np.arctan2(mean_other_rew, batch.rew + epsilon))
-        svo_hat = np.clip(svo_hat, 0, 90)
+        svo_hat = np.arctan2(mean_other_rew, batch.rew + epsilon)
+        svo_hat = np.clip(svo_hat, 0, np.pi/2)
         self.mean_svo_hat = svo_hat.mean()
         intr_rew = np.abs(svo_hat - self.svo) * self.reward_scale        
         batch.policy = Batch(
@@ -98,6 +98,8 @@ class SVOPolicy(BasePolicy):
             )
         # add intr_rew and reward loss to reward
         batch.rew -= intr_rew
+        # reset state for the inner policy
+        self.policy.actor.preprocess.state = None
         return self.policy.process_fn(batch, buffer, indices)
 
     def post_process_fn(
