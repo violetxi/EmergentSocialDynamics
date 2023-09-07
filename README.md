@@ -56,6 +56,11 @@ You can also change evaluation setting (anything in the config is modifiable) us
     CUDA_VISIBLE_DEVICES={GPU_NUM} python main.py exp_run.eval_only=True exp_run.ckpt_dir={}environment.max_cycles=5000 trainer.test_eps=5 exp_run.result_dir=/ccn2/u/ziyxiang/EmergentSocialDynamics/results_ep-len_5000
     ```
 This will add step-wise reward for each agent per-episode to new `.pkl` with other evaluation saved in the same directory, and save frames for all the episodes inside a folder called frames. The frames for each episode will be saved in the one folder.
+#### Plots
+To get evaluation plots, the the plotting functions are inside `plot_utils.py` 
+```
+python analysis.py
+```
 ### Visualize behavior
 Once the frames are created, u can copy `create_video.sh` into the `frames/` folder and create videos 
 ```
