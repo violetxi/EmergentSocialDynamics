@@ -28,4 +28,36 @@ Install repo and dependency (using *venv* or *conda env* with `python=3.8`)
 ```
 pip install -e .
 ```
-
+## Running experiments
+### Training
+Experiments are seperated into different folders inside `experiments/`. The suggestion is to create a folder for each model and have 
+all the checkpoints and experiment configuration and parameter sweeping related stuff stored inside an `outputs/` folder. As an example, to run 
+an experiment, go to one of the folders, e.g., `experiments/icm_5_agents_gru/` and run it using 
+```
+cd experiments/icm_5_agents_gru/
+CUDA_VISIBLE_DEVICES={} python main.py
+```
+To run hyper-parameter search with `wandb`, go to an experiment folder and start the sweep with this command
+```
+wandb sweep --project {PROJECT_NAME} --name {SWEEP_NAME} config/sweep.yaml
+```
+Once the command started, you will get the search run command, and run many wandb agents in parallel using 
+```
+CUDA_VISIBLE_DEVICES={GPU_NUM} wandb agent stanford_autonomous_agent/{SWEEP_NAME}/{SWEEP_ID}
+```
+### Evaluation
+To run evaluation with default setting, go to an experiment folder:
+```
+CUDA_VISIBLE_DEVICES={GPU_NUM} python main.py exp_run.eval_only=True exp_run.ckpt_dir={CKPT_DIR}
+```
+You can also change evaluation setting (anything in the config is modifiable) using commands similar to the following
+  - change number of tested episode, steps in an episode and result directory
+    ```
+    CUDA_VISIBLE_DEVICES={GPU_NUM} python main.py exp_run.eval_only=True exp_run.ckpt_dir={}environment.max_cycles=5000 trainer.test_eps=5 exp_run.result_dir=/ccn2/u/ziyxiang/EmergentSocialDynamics/results_ep-len_5000
+    ```
+This will add step-wise reward for each agent per-episode to new `.pkl` with other evaluation saved in the same directory, and save frames for all the episodes inside a folder called frames. The frames for each episode will be saved in the one folder.
+### Visualize behavior
+Once the frames are created, u can copy `create_video.sh` into the `frames/` folder and create videos 
+```
+bash create_video.sh
+```
