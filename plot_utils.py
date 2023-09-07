@@ -8,24 +8,32 @@ from typeguard import typechecked
 
 from social_rl.utils.utils import ensure_dir
 
+# order of models so color is consistent
+model_list = ['ppo', 'ppo_gru', 'icm_gru','im_rew_gru', 'svo_gru', 'social_influence_gru']
+
 
 # format model names
-def format_model_name(name):
+def format_model_name(name, verbose=False):
     parameters = name.split('-')
-    formatted_params = [parameters[0]]  # keep the primary descriptor as is    
-    for param in parameters[1:]:        
-        key = param.split('=')[0].split('.')[-1]    #param.split('=').split('.')  #param.split('.')[-1].split('=')[0]
-        value = param.split('=')[-1]
-        try:
-            value = float(value)
-            if value.is_integer():
-                formatted_value = f"{int(value):d}"
-            else:
-                formatted_value = f"{value:.5f}"
-        except ValueError:
-            formatted_value = value
-        formatted_params.append(f"{key}={formatted_value}")
-    return '-'.join(formatted_params)
+    # add all hyperparameters to the model name
+    if verbose:        
+        formatted_params = [parameters[0]]  # keep the primary descriptor as is    
+        for param in parameters[1:]:        
+            key = param.split('=')[0].split('.')[-1]    #param.split('=').split('.')  #param.split('.')[-1].split('=')[0]
+            value = param.split('=')[-1]
+            try:
+                value = float(value)
+                if value.is_integer():
+                    formatted_value = f"{int(value):d}"
+                else:
+                    formatted_value = f"{value:.5f}"
+            except ValueError:
+                formatted_value = value
+            formatted_params.append(f"{key}={formatted_value}")
+        out_name = '-'.join(formatted_params)
+    else:
+        out_name = parameters[0]
+    return out_name    
 
 
 @typechecked
@@ -45,7 +53,7 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     for run in data:
         for model, episodes in run.items():       
             if model not in plot_data:
-                model = format_model_name(model)
+                model = format_model_name(model)                
                 plot_data[model] = {agent: [] for agent in episodes[0].keys()}
             for episode in episodes:
                 for agent, rewards in episode.items():
@@ -53,27 +61,31 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     
     sns.set_palette("colorblind")
     # Calculate average cumulative reward and standard error for each episode across all runs
-    for model, agents in plot_data.items():
-        fig, ax = plt.subplots(figsize=(10, 6))
-        for agent, rewards in agents.items():
-            rewards = np.array(rewards)  # Convert rewards to numpy array for broadcasting
-            avg_rewards = np.mean(rewards, axis=0)  # Average rewards for each episode across all runs
-            std_error = np.std(rewards, axis=0) / np.sqrt(len(rewards))  # Standard error for each episode across all runs
+    #for model, agents in plot_data.items():
+    for model in model_list:
+        # @TODO: temporary fix for missing models
+        if model in plot_data:            
+            agents = plot_data[model]
+            fig, ax = plt.subplots(figsize=(10, 6))
+            for agent, rewards in agents.items():
+                rewards = np.array(rewards)  # Convert rewards to numpy array for broadcasting
+                avg_rewards = np.mean(rewards, axis=0)  # Average rewards for each episode across all runs
+                std_error = np.std(rewards, axis=0) / np.sqrt(len(rewards))  # Standard error for each episode across all runs
 
-            # Plot the average cumulative rewards over episodes with standard error as shaded area using seaborn
-            ax.plot(range(len(avg_rewards)), avg_rewards, label=agent)
-            ax.fill_between(range(len(avg_rewards)), avg_rewards - std_error, avg_rewards + std_error, alpha=0.2)
+                # Plot the average cumulative rewards over episodes with standard error as shaded area using seaborn
+                ax.plot(range(len(avg_rewards)), avg_rewards, label=agent)
+                ax.fill_between(range(len(avg_rewards)), avg_rewards - std_error, avg_rewards + std_error, alpha=0.2)
 
-        ax.set_title(f"{model}")
-        ax.set_xlabel("Steps")
-        ax.set_ylabel("Average Cumulative Reward")
-        ax.legend(title="Agent",  prop={'size': 12}, title_fontsize='14')
-        sns.despine()
-        # save the plot 
-        fig_save_path = os.path.join(folder_name, f"{model}.png")
-        plt.savefig(fig_save_path)
-        print(f"Plot saved to {fig_save_path}")
-        plt.close()
+            ax.set_title(f"{model}")
+            ax.set_xlabel("Steps")
+            ax.set_ylabel("Average Cumulative Reward")
+            ax.legend(title="Agent",  prop={'size': 12}, title_fontsize='14')
+            sns.despine()
+            # save the plot 
+            fig_save_path = os.path.join(folder_name, f"{model}.png")
+            plt.savefig(fig_save_path)
+            print(f"Plot saved to {fig_save_path}")
+            plt.close()
 
 
 def plot_eval_metrics(result_path: str) -> None:        
@@ -97,7 +109,15 @@ def plot_eval_metrics(result_path: str) -> None:
         data = pd.read_pickle(f)    
     # extracting model names and their corresponding rewards data
     model_names = [list(item.keys())[0] for item in data]
-    model_rewards = [list(item.values())[0] for item in data]
+    formatted_model_names = [format_model_name(name) for name in model_names]
+    unordered_model_rewards = [list(item.values())[0] for item in data]
+    # make sure models always plot in the same order even if they are not stored
+    model_rewards = []
+    for model in model_list:
+        if model in formatted_model_names:
+            model_idx = formatted_model_names.index(model)
+            model_rewards.append(unordered_model_rewards[model_idx])
+    
     # compute average total population return and standard error for each model
     average_returns = []
     standard_errors = []
@@ -107,10 +127,8 @@ def plot_eval_metrics(result_path: str) -> None:
         # Compute average and standard error
         average_returns.append(np.mean(episode_totals))
         standard_errors.append(np.std(episode_totals) / np.sqrt(len(episode_totals)))
-
     # Compute average Gini coefficient for each model
     average_ginis = []
-
     for rewards in model_rewards:
         # get the difference between 1 and the Gini coefficient 
         gini_values = [
@@ -119,17 +137,15 @@ def plot_eval_metrics(result_path: str) -> None:
                 ]) for episode in rewards
             ]
         average_ginis.append(np.mean(gini_values))
-    
-    formatted_model_names = [format_model_name(name) for name in model_names]
 
     # Plotting using Seaborn
     sns.set_palette("colorblind")
-    rotation = 90
-    horizontal_alignment = 'left'
+    rotation = 15
+    horizontal_alignment = 'center'
     fig, axs = plt.subplots(1, 2, figsize=(15, 10))
-    # Subplot 1: Average total population return with standard error
+    # Subplot 1: Average total population return with standard error    
     sns.barplot(
-        x=formatted_model_names, 
+        x=model_list, 
         y=average_returns, 
         yerr=standard_errors, 
         capsize=0.1, 
@@ -141,11 +157,11 @@ def plot_eval_metrics(result_path: str) -> None:
     axs[0].set_ylabel('Average Return')
     axs[0].set_xlabel('Model')
     axs[0].set_title("Population Return")
-    axs[0].set_xticklabels(formatted_model_names, rotation=rotation, ha=horizontal_alignment)
+    axs[0].set_xticklabels(model_list, rotation=rotation, ha=horizontal_alignment)
 
     # Subplot 2: Average Gini coefficient
     sns.barplot(
-        x=formatted_model_names, 
+        x=model_list, 
         y=average_ginis, 
         errorbar=None, 
         ax=axs[1], 
@@ -155,7 +171,7 @@ def plot_eval_metrics(result_path: str) -> None:
     axs[1].set_ylabel('Average Equity (1 - Gini Coefficient)')
     axs[1].set_xlabel('Model')
     axs[1].set_title("Population Equity")
-    axs[1].set_xticklabels(formatted_model_names, rotation=rotation, ha=horizontal_alignment)
+    axs[1].set_xticklabels(model_list, rotation=rotation, ha=horizontal_alignment)
 
     plt.tight_layout()
     fig_path = os.path.join(
@@ -179,7 +195,9 @@ def plot_avg_agent_return_with_std_error(result_path: str) -> None:
                     for agent, rewards in episode.items():
                         avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
         # Calculate average return and standard error for each model
-        for model, agents in avg_returns.items():
+        #for model, agents in avg_returns.items():
+        for model in model_list:
+            agents = avg_returns[model]
             for agent, rewards in agents.items():
                 avg_returns[model][agent] = (np.mean(rewards), np.std(rewards) / np.sqrt(len(rewards)))  # Average return and standard error
 
