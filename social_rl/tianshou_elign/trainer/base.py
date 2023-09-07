@@ -234,6 +234,8 @@ class BaseTrainer(ABC):
             assert self.episode_per_test is not None
             assert not isinstance(self.test_collector, AsyncCollector)  # Issue 700
             self.test_collector.reset_stat()
+            # reset rnn hidden_state before testing
+            self.policy.reset_hidden_state()     
             test_result = test_episode(
                 self.policy, self.test_collector, self.test_fn, self.start_epoch,
                 self.episode_per_test, self.logger, self.env_step, self.reward_metric
@@ -305,7 +307,7 @@ class BaseTrainer(ABC):
                 self.policy_update_fn(data, result)
                 t.set_postfix(**data)
 
-            if t.n <= t.total and not self.stop_fn_flag:
+            if t.n <= t.total and not self.stop_fn_flag:                
                 t.update()
 
         # for offline RL
@@ -318,6 +320,7 @@ class BaseTrainer(ABC):
             )
             # test
             if self.test_collector is not None:
+                self.policy.reset_hidden_state()             
                 test_stat, self.stop_fn_flag = self.test_step()
                 if not self.is_run:
                     epoch_stat.update(test_stat)

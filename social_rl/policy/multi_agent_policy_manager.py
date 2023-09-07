@@ -44,6 +44,16 @@ class MultiAgentPolicyManager(BasePolicy):
         policy.set_agent_id(agent_id)
         self.policies[agent_id] = policy
 
+    def reset_hidden_state(self) -> None:
+        """Reset the hidden state of each policy."""
+        for agent_id, policy in self.policies.items():
+            if hasattr(policy, "actor"):                
+                # PPO base policy 
+                policy.actor.preprocess.state = None        
+            else:
+                # other IM policies wrapped PPO
+                policy.policy.actor.preprocess.state = None
+
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indice: np.ndarray
     ) -> Batch:
@@ -189,7 +199,7 @@ class MultiAgentPolicyManager(BasePolicy):
             tmp_batch = Batch(tmp_batch_dict)
             out = policy(
                 batch=tmp_batch,
-                state=None if state is None else state[agent_id],
+                state=None, # we keep track of state in actor network
                 **kwargs
             )
             act = out.act
@@ -222,6 +232,8 @@ class MultiAgentPolicyManager(BasePolicy):
             }
         """
         results = {}
+        # reset hidden states for each state
+        self.reset_hidden_state()
         for agent_id, policy in self.policies.items():            
             data = batch[agent_id]
             if not data.is_empty():                

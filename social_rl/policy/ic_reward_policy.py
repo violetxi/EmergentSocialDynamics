@@ -91,7 +91,7 @@ class IMRewardPolicy(BasePolicy):
         rew = batch.rew
         forward_mse_loss, rew_mse_loss, act_hat = self.model(
             curr_obs, curr_act, next_obs, prev_other_act, rew
-            )                
+            )
         batch.policy = Batch(
             orig_rew=batch.rew, 
             act_hat=act_hat, 
@@ -100,6 +100,8 @@ class IMRewardPolicy(BasePolicy):
             )
         # add forwrad and reward loss to reward
         batch.rew += to_numpy((rew_mse_loss) * self.reward_scale)
+        #  reset  state of the policy network before processing a new batch
+        # self.policy.actor.preprocess.state = None
         return self.policy.process_fn(batch, buffer, indices)
 
     def post_process_fn(
@@ -120,8 +122,7 @@ class IMRewardPolicy(BasePolicy):
         act = to_torch(batch.act, dtype=torch.long, device=act_hat.device)
         inverse_loss = F.cross_entropy(act_hat, act).mean()
         forward_loss = batch.policy.forward_mse_loss.mean()
-        rew_loss = batch.policy.rew_mse_loss.mean()
-        # @TODO: try different weighting for rew loss
+        rew_loss = batch.policy.rew_mse_loss.mean()        
         loss = (
             (1 - self.forward_loss_weight) * inverse_loss +
             self.forward_loss_weight * forward_loss + rew_loss

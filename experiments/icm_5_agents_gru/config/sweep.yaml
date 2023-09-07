@@ -5,9 +5,7 @@ metric:
   name: test/best_reward # or any metric you are logging and want to optimize
   goal: maximize # or 'maximize' based on the metric
 
-parameters:
-  environment.stack_num:
-    values: [4, 8, 12, 16, 20]
+parameters:  
   agent.optim.ppo_lr:
     distribution: uniform
     min: 1e-5

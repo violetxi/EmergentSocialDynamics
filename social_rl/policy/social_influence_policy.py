@@ -121,7 +121,7 @@ class SocialInfluencePolicy(BasePolicy):
             )
         batch.rew = batch.rew + intr_rew
         # reset state for the inner policy
-        self.policy.actor.preprocess.state = None
+        # self.policy.actor.preprocess.state = None
         return self.policy.process_fn(batch, buffer, indices)
 
     def post_process_fn(

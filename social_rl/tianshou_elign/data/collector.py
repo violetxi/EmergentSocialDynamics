@@ -23,7 +23,6 @@ from social_rl.tianshou_elign.env.vecenv import BaseVectorEnv
 from social_rl.tianshou_elign.env.utils import BaseRewardLogger
 
 
-import psutil
 class Collector(object):
     """Collector enables the policy to interact with different types of envs with \
     exact number of steps or episodes.
@@ -179,14 +178,9 @@ class Collector(object):
         self.data.obs = obs     # (env_num,)        
 
     def _reset_state(self, id: Union[int, List[int]]) -> None:
-        """Reset the hidden state: self.data.state[id]."""
-        for agent_id, policy in self.policy.policies.items():
-            if hasattr(policy, "actor"):                
-                # PPO base policy 
-                policy.actor.preprocess.state = None        
-            else:
-                # other IM policies wrapped PPO
-                policy.policy.actor.preprocess.state = None
+        """Reset the hidden state: self.data.state[id]."""        
+        # reset hidden state of of the policy 
+        self.policy.reset_hidden_state()
         if hasattr(self.data.policy, "hidden_state"):
             state = self.data.policy.hidden_state  # it is a reference
             if isinstance(state, torch.Tensor):
@@ -304,7 +298,7 @@ class Collector(object):
         while True:
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
-            last_state = self.data.policy.pop("hidden_state", None)
+            last_state = self.data.policy.pop("hidden_state", None)            
             # get the next action
             if random:
                 try:

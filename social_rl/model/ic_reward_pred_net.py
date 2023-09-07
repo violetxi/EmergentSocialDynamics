@@ -81,10 +81,8 @@ class IMRewardModule(nn.Module):
         forward_mse_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)        
         act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
         # reward prediction        
-        prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
-        bs, ts, n_agents = prev_other_act.shape
-        # only using last action not the history
-        prev_other_act = prev_other_act[:, -1, :]
+        prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)        
+        bs, n_agents = prev_other_act.shape                
         prev_other_act_one_hot = F.one_hot(
             prev_other_act, num_classes=self.action_dim).reshape(bs, -1)
         rew = to_torch(rew, dtype=torch.float32, device=self.device).unsqueeze(1)
