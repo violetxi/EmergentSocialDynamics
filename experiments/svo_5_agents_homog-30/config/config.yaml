@@ -92,5 +92,5 @@ model:
     class_name: 'SVOPolicy'    
     args:
       reward_scale: 0.2      
-      svo: 1.31    # 75 (pi/2.4)
+      svo: 0.52    # pi / 6
       

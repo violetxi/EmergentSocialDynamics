@@ -36,7 +36,7 @@ class SocialInfluenceMOAModule(nn.Module):
         rnn_num_layers: int,
         device: Union[str, torch.device] = "cpu"
     ) -> None:
-        super().__init__()
+        super().__init__()                        
         self.feature_net = feature_net
         self.fc = MLP(
             flatten_dim,
@@ -45,19 +45,19 @@ class SocialInfluenceMOAModule(nn.Module):
             device=device
         )
         self.rnn = nn.GRU(
-            input_size=cnn_output_dim + action_dim,
+            input_size=cnn_output_dim + action_dim * (num_other_agents+1),
             hidden_size=rnn_hidden_size,
             num_layers=rnn_num_layers,
             batch_first=True,
-            )
-        self.rnn_num_layers = rnn_num_layers
-        self.state = None
+            )                
         self.rnn_fc = nn.Linear(
             rnn_hidden_size, 
             num_other_agents * action_dim
             )
-        self.num_other_agents = num_other_agents
+        self.rnn_num_layers = rnn_num_layers
+        self.num_other_agents = num_other_agents        
         self.action_dim = action_dim
+        self.state = None
         self.device = device            
 
     def forward(
@@ -70,9 +70,10 @@ class SocialInfluenceMOAModule(nn.Module):
         ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Mapping: self obs and prev action -> other agents' actions"""        
         prev_act = to_torch(prev_act, dtype=torch.long, device=self.device)
-        reshaped_logits = self.compute_logits(curr_obs, prev_act)
-        # other agents' actions as ground truth
         prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
+        all_act = torch.cat([prev_act, prev_other_act], dim=-1)                
+        reshaped_logits = self.compute_logits(curr_obs, all_act)
+        # other agents' actions as ground truth        
         total_loss = 0
         # cross-entropy loss for each agent
         for agent in range(self.num_other_agents):
@@ -102,14 +103,17 @@ class SocialInfluenceMOAModule(nn.Module):
             self, 
             curr_obs: torch.Tensor,
             prev_act: Union[torch.Tensor, np.ndarray],
-            prev_other_act: Union[torch.Tensor, np.ndarray]
+            prev_other_act: Union[torch.Tensor, np.ndarray],
+            action_logits: torch.Tensor,
             ) -> torch.Tensor:
         with torch.no_grad():
             prev_act = to_torch(prev_act, dtype=torch.long, device=self.device)
             prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
+            all_act = torch.cat([prev_act, prev_other_act], dim=-1)
             # other agents action logits given self action
-            pred_logits = self.compute_logits(curr_obs, prev_act)
+            pred_logits = self.compute_logits(curr_obs, all_act)
             pred_probs = F.softmax(pred_logits, dim=-1)
+            breakpoint()
             # compute marginal probability of other agents' actions
             prev_act_logits = F.one_hot(prev_act, num_classes=self.action_dim)
             prev_act_probs = F.softmax(prev_act_logits.float(), dim=-1)

@@ -53,7 +53,7 @@ environment:
   stack_num: 1    # this decides the number of observation stacked
   
 model:
-  name: svo_gru
+  name: svo_homog_15
   net:
     module_path: 'social_rl.model.core'
     class_name: 'ConvGRU'
@@ -89,8 +89,8 @@ model:
 
   IMPolicy:
     module_path: 'social_rl.policy.svo_policy'
-    class_name: 'SVOPolicy'    
+    class_name: 'SVOPolicy'
     args:
       reward_scale: 0.2      
-      svo: 1.31    # 75 (pi/2.4)
+      svo: 0.26    # pi/12
       

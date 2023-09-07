@@ -83,7 +83,7 @@ class SocialInfluencePolicy(BasePolicy):
 
             Please refer to :meth:`~tianshou.policy.BasePolicy.forward` for
             more detailed explanation.
-        """
+        """                        
         return self.policy.forward(batch, state, **kwargs)
 
     def exploration_noise(
@@ -113,7 +113,15 @@ class SocialInfluencePolicy(BasePolicy):
         curr_obs = batch.obs.observation.curr_obs.cuda()
         prev_act = batch.obs.observation.self_actions
         other_act = batch.obs.observation.other_agent_actions
-        intr_rew = self.model.compute_influence_reward(curr_obs, prev_act, other_act)
+        with torch.no_grad():
+            policy_out = self(batch)
+                  
+        intr_rew = self.model.compute_influence_reward(
+            curr_obs, 
+            prev_act, 
+            other_act,
+            policy_out.logits
+            )
         intr_rew = intr_rew * self.reward_scale
         batch.policy = Batch(
             orig_rew=batch.rew,             
