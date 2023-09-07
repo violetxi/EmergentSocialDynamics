@@ -38,7 +38,8 @@ def format_model_name(name, verbose=False):
 
 @typechecked
 def plot_avg_cumulative_rewards(result_path: str) -> None:
-    """Plot cumulative rewards for each agent across differe
+    """
+    Plot cumulative rewards for each agent across differe
     """
     data = pickle.load(open(result_path, 'rb'))    
     filename = os.path.basename(result_path)
@@ -62,8 +63,7 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     sns.set_palette("colorblind")
     # Calculate average cumulative reward and standard error for each episode across all runs
     #for model, agents in plot_data.items():
-    for model in model_list:
-        # @TODO: temporary fix for missing models
+    for model in model_list:        
         if model in plot_data:            
             agents = plot_data[model]
             fig, ax = plt.subplots(figsize=(10, 6))
