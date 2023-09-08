@@ -14,10 +14,14 @@ parameters:
     distribution: uniform
     min: 0.01
     max: 0.25
+  model.IMPolicy.args.model_lr:
+    distribution: uniform
+    min: 1e-5
+    max: 1e-3
   model.IMPolicy.args.reward_scale:
     distribution: uniform
-    min: 0.0
-    max: 0.21
+    min: 0.01
+    max: 5.0
 
 command:
   - ${env}

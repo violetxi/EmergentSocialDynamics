@@ -71,7 +71,7 @@ class SocialInfluenceMOAModule(nn.Module):
         r"""Mapping: self obs and prev action -> other agents' actions"""        
         prev_act = to_torch(prev_act, dtype=torch.long, device=self.device)
         prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
-        all_act = torch.cat([prev_act, prev_other_act], dim=-1)                
+        all_act = torch.cat([prev_act, prev_other_act], dim=-1)
         reshaped_logits = self.compute_logits(curr_obs, all_act)
         # other agents' actions as ground truth        
         total_loss = 0
@@ -105,19 +105,42 @@ class SocialInfluenceMOAModule(nn.Module):
             prev_act: Union[torch.Tensor, np.ndarray],
             prev_other_act: Union[torch.Tensor, np.ndarray],
             action_logits: torch.Tensor,
+            prev_visibility: Optional[Union[torch.Tensor, np.ndarray]] = None,
             ) -> torch.Tensor:
+        """Compute influence reward for self conditioned on other agents' actions
+        and self action
+        :param torch.Tensor curr_obs: current observation.
+        :param torch.Tensor prev_act: previous action.
+        :param torch.Tensor prev_other_act: previous other agents' actions.
+        :param torch.Tensor action_logits: logits of self action.
+        """
         with torch.no_grad():
             prev_act = to_torch(prev_act, dtype=torch.long, device=self.device)
             prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
-            all_act = torch.cat([prev_act, prev_other_act], dim=-1)
-            # other agents action logits given self action
-            pred_logits = self.compute_logits(curr_obs, all_act)
-            pred_probs = F.softmax(pred_logits, dim=-1)
-            breakpoint()
-            # compute marginal probability of other agents' actions
-            prev_act_logits = F.one_hot(prev_act, num_classes=self.action_dim)
-            prev_act_probs = F.softmax(prev_act_logits.float(), dim=-1)
-            marginal_probs = torch.sum(pred_probs * prev_act_probs, dim=-1)
-            counter_fact_probs = torch.gather(pred_probs, dim=-1, index=prev_other_act.unsqueeze(-1)).squeeze(-1)
-            kl_value = F.kl_div(counter_fact_probs.log(), marginal_probs, reduction='none').sum(dim=-1)            
-        return to_numpy(kl_value)
+            all_act = torch.cat([prev_act, prev_other_act], dim=-1)            
+            # compute counter factual probability of other agents' actions conditioned 
+            # on all possible self actions
+            counter_factual_logits = []
+            for self_act in range(self.action_dim):
+                self_act = torch.tensor(self_act).repeat(
+                    prev_other_act.shape[0]).unsqueeze(1).to(self.device)
+                all_act = torch.cat([self_act, prev_other_act], dim=-1)
+                counter_factual_logit = self.compute_logits(curr_obs, all_act)
+                counter_factual_logits.append(counter_factual_logit)
+            # (bs, action_dim, num_other_agents, action_dim)
+            counter_factual_logits = torch.stack(counter_factual_logits).permute(1, 0, 2, 3)
+            counter_factiual_probs = F.softmax(counter_factual_logits, dim=-1)            
+            # use agent's action as indices to select predicted logits for other agents            
+            predicted_logits = torch.gather(
+                counter_factual_logits, 1, prev_act.unsqueeze(2).unsqueeze(3).expand(
+                -1, -1, self.num_other_agents, self.action_dim)
+                ).squeeze(1)            
+            pred_probs = F.softmax(predicted_logits, dim=-1)
+            # compute marginal probability of other agents' actions                        
+            act_probs = F.softmax(action_logits, dim=-1).unsqueeze(1).unsqueeze(1)
+            marginal_probs = torch.sum(counter_factiual_probs * act_probs, dim=1)
+            kl_value = F.kl_div(pred_probs.log(), marginal_probs, reduction='none').sum(dim=-1)
+        if prev_visibility is not None:
+            kl_value = kl_value * to_torch(prev_visibility, device=self.device)
+        influence = kl_value.sum(dim=-1)
+        return to_numpy(influence)

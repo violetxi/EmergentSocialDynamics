@@ -52,7 +52,7 @@ environment:
   stack_num: 1    # this decides the number of observation stacked
   
 model:
-  name: social_influence_gru
+  name: social_influence_all
   net:
     module_path: 'social_rl.model.core'
     class_name: 'ConvGRU'
@@ -90,7 +90,7 @@ model:
     module_path: 'social_rl.policy.social_influence_policy'
     class_name: 'SocialInfluencePolicy'    
     args:
-      reward_scale: 0.2
+      reward_scale: 1.0
       lr_scale: 1.0
       model_lr: 1e-4
       num_other_agents: 4
@@ -99,5 +99,6 @@ model:
       cnn_hidden_dim: 64
       cnn_output_dim: 64
       rnn_hidden_size: 128
-      rnn_num_layers: 2  
+      rnn_num_layers: 2
+      influence_only_when_visible: False
       

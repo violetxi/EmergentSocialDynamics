@@ -37,7 +37,8 @@ class SocialInfluencePolicy(BasePolicy):
         cnn_hidden_dim: int,
         cnn_output_dim: int,
         rnn_hidden_size: int,
-        rnn_num_layers: int,        
+        rnn_num_layers: int,
+        influence_only_when_visible: bool,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -59,6 +60,7 @@ class SocialInfluencePolicy(BasePolicy):
         self.model_optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.model_lr
         )
+        self.influence_only_when_visible = influence_only_when_visible
 
 
     def train(
@@ -113,14 +115,20 @@ class SocialInfluencePolicy(BasePolicy):
         curr_obs = batch.obs.observation.curr_obs.cuda()
         prev_act = batch.obs.observation.self_actions
         other_act = batch.obs.observation.other_agent_actions
+        # zero out the influence reward if agent is not visible
+        if self.influence_only_when_visible:
+            prev_visibility = batch.obs.observation.prev_visible_agents
+        else:    # all agents can be influenced            
+            prev_visibility = None
+            
         with torch.no_grad():
             policy_out = self(batch)
-                  
         intr_rew = self.model.compute_influence_reward(
             curr_obs, 
             prev_act, 
             other_act,
-            policy_out.logits
+            policy_out.logits,
+            prev_visibility
             )
         intr_rew = intr_rew * self.reward_scale
         batch.policy = Batch(
@@ -128,8 +136,6 @@ class SocialInfluencePolicy(BasePolicy):
             intr_rew=intr_rew,
             )
         batch.rew = batch.rew + intr_rew
-        # reset state for the inner policy
-        # self.policy.actor.preprocess.state = None
         return self.policy.process_fn(batch, buffer, indices)
 
     def post_process_fn(
@@ -154,7 +160,9 @@ class SocialInfluencePolicy(BasePolicy):
         moa_loss = self.model(curr_obs, prev_act, other_act) * self.lr_scale
         moa_loss.backward()
         self.model_optimizer.step()
+        # log moa loss and influence reward per batch
         res.update(
-            {"moa_loss": moa_loss.item()}
+            {"moa_loss": moa_loss.item(),
+             "influence_reward": batch.policy.intr_rew.mean().item()}
         )
         return res
