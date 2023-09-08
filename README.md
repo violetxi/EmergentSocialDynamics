@@ -2,6 +2,10 @@
 Context dependent intrinsic motivation allows diverse social dynamics to emerge from different environment.
 
 ## Installation
+Create virtual environment
+```
+conda create -n {ENV_NAME} python=3.8
+```
 
 Install this repo on a remote cluster without full previlige, first install SWIG from source:
 
