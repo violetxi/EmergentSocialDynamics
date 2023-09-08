@@ -16,7 +16,7 @@ tar -xvf swig-4.1.1.tar.gz && cd swig-4.1.1/
 ```
 Configure the makefile for SWIG. This is where you specify the prefix to a directory that you have write access to:
 ```
-./configure --prefix=/path/to/your/directory/  --without-pcre
+./configure --prefix={}  --without-pcre
 ```
 Build and install SWIG 
 ```
@@ -25,7 +25,7 @@ make && make install
 
 Then add the `bin` directory to your ~/.bashrc
 ```
-echo 'export PATH=/path/to/your/home/directory/bin:$PATH' >> ~/.bashrc
+echo 'export PATH={PATH_TO_YOUR_SWIG_DIR}/bin:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 Install repo and dependency (using *venv* or *conda env* with `python=3.8`)
