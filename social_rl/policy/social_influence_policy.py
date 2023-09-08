@@ -29,7 +29,7 @@ class SocialInfluencePolicy(BasePolicy):
         self,
         policy: BasePolicy,
         reward_scale: float,
-        lr_scale: float,
+        moa_lr_scale: float,
         model_lr: float,
         num_other_agents: int,
         action_dim: int,
@@ -44,7 +44,7 @@ class SocialInfluencePolicy(BasePolicy):
         super().__init__(**kwargs)
         self.policy = policy       
         self.reward_scale = reward_scale
-        self.lr_scale = lr_scale
+        self.moa_lr_scale = moa_lr_scale
         self.model_lr = model_lr
         self.model = SocialInfluenceMOAModule(
             feature_net=self.policy.actor.preprocess.conv,    # sharing conv with policy
@@ -155,9 +155,14 @@ class SocialInfluencePolicy(BasePolicy):
         self.model_optimizer.zero_grad()
         curr_obs = batch.obs.observation.curr_obs.cuda()
         prev_act = batch.obs.observation.self_actions
-        other_act = batch.obs.observation.other_agent_actions
+        prev_other_act = batch.obs.observation.other_agent_actions
+        curr_other_act = batch.obs_next.observation.other_agent_actions
         # state reset happens for every batch
-        moa_loss = self.model(curr_obs, prev_act, other_act) * self.lr_scale
+        moa_loss = self.model(
+            curr_obs, 
+            prev_act, 
+            prev_other_act,
+            curr_other_act) * self.moa_lr_scale
         moa_loss.backward()
         self.model_optimizer.step()
         # log moa loss and influence reward per batch

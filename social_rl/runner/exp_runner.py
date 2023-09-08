@@ -367,11 +367,16 @@ class TrainRunner:
         model_name = args.model.name
         sweep_config = OmegaConf.load(
             os.path.join(ckpt_dir, '.hydra', 'overrides.yaml')
-            )
-        for sweep_args in sweep_config:
-            model_name += f"-{sweep_args}"
+            )        
+        # for sweep_args in sweep_config:
+        #     model_name += f"-{sweep_args}"
         print(model_name)
-        data = self._convert_save_data(data)        
+        data = self._convert_save_data(data)    
+        # save single model result
+        single_model_result_path = os.path.join(
+            args.exp_run.result_dir, f"{task_name}_{num_agents}_{model_name}.pkl")
+        with open(single_model_result_path, 'wb') as f:
+            pickle.dump(data, f)
         if os.path.exists(result_path):
             print(f"{result_path} alreadying exist, appending data..")
             with open(result_path, 'rb') as f:

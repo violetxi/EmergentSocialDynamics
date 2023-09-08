@@ -62,8 +62,7 @@ def plot_avg_cumulative_rewards(result_path: str) -> None:
     
     sns.set_palette("colorblind")
     # Calculate average cumulative reward and standard error for each episode across all runs
-    #for model, agents in plot_data.items():
-    for model in model_list:        
+    for model, agents in plot_data.items():        
         if model in plot_data:            
             agents = plot_data[model]
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -109,14 +108,15 @@ def plot_eval_metrics(result_path: str) -> None:
         data = pd.read_pickle(f)    
     # extracting model names and their corresponding rewards data
     model_names = [list(item.keys())[0] for item in data]
+    model_rewards = [list(item.values())[0] for item in data]
     formatted_model_names = [format_model_name(name) for name in model_names]
-    unordered_model_rewards = [list(item.values())[0] for item in data]
+    # unordered_model_rewards = [list(item.values())[0] for item in data]
     # make sure models always plot in the same order even if they are not stored
-    model_rewards = []
-    for model in model_list:
-        if model in formatted_model_names:
-            model_idx = formatted_model_names.index(model)
-            model_rewards.append(unordered_model_rewards[model_idx])
+    # model_rewards = []    
+    # for model in model_list:
+    #     if model in formatted_model_names:
+    #         model_idx = formatted_model_names.index(model)
+    #         model_rewards.append(unordered_model_rewards[model_idx])
     
     # compute average total population return and standard error for each model
     average_returns = []
@@ -145,7 +145,7 @@ def plot_eval_metrics(result_path: str) -> None:
     fig, axs = plt.subplots(1, 2, figsize=(15, 10))
     # Subplot 1: Average total population return with standard error    
     sns.barplot(
-        x=model_list, 
+        x=formatted_model_names, 
         y=average_returns, 
         yerr=standard_errors, 
         capsize=0.1, 
@@ -157,11 +157,11 @@ def plot_eval_metrics(result_path: str) -> None:
     axs[0].set_ylabel('Average Return')
     axs[0].set_xlabel('Model')
     axs[0].set_title("Population Return")
-    axs[0].set_xticklabels(model_list, rotation=rotation, ha=horizontal_alignment)
+    axs[0].set_xticklabels(formatted_model_names, rotation=rotation, ha=horizontal_alignment)
 
     # Subplot 2: Average Gini coefficient
     sns.barplot(
-        x=model_list, 
+        x=formatted_model_names, 
         y=average_ginis, 
         errorbar=None, 
         ax=axs[1], 
@@ -171,7 +171,7 @@ def plot_eval_metrics(result_path: str) -> None:
     axs[1].set_ylabel('Average Equity (1 - Gini Coefficient)')
     axs[1].set_xlabel('Model')
     axs[1].set_title("Population Equity")
-    axs[1].set_xticklabels(model_list, rotation=rotation, ha=horizontal_alignment)
+    axs[1].set_xticklabels(formatted_model_names, rotation=rotation, ha=horizontal_alignment)
 
     plt.tight_layout()
     fig_path = os.path.join(
@@ -195,8 +195,8 @@ def plot_avg_agent_return_with_std_error(result_path: str) -> None:
                     for agent, rewards in episode.items():
                         avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
         # Calculate average return and standard error for each model
-        #for model, agents in avg_returns.items():
-        for model in model_list:
+        for model, agents in avg_returns.items():
+        # for model in model_list:
             agents = avg_returns[model]
             for agent, rewards in agents.items():
                 avg_returns[model][agent] = (np.mean(rewards), np.std(rewards) / np.sqrt(len(rewards)))  # Average return and standard error

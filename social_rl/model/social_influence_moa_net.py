@@ -65,12 +65,14 @@ class SocialInfluenceMOAModule(nn.Module):
         curr_obs: torch.Tensor,
         prev_act: Union[torch.Tensor, np.ndarray],
         prev_other_act: Union[torch.Tensor, np.ndarray],
+        current_other_act: Union[torch.Tensor, np.ndarray],
         state: Optional[torch.Tensor] = None,
         **kwargs: Any
         ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Mapping: self obs and prev action -> other agents' actions"""        
         prev_act = to_torch(prev_act, dtype=torch.long, device=self.device)
         prev_other_act = to_torch(prev_other_act, dtype=torch.long, device=self.device)
+        current_other_act = to_torch(current_other_act, dtype=torch.long, device=self.device)
         all_act = torch.cat([prev_act, prev_other_act], dim=-1)
         reshaped_logits = self.compute_logits(curr_obs, all_act)
         # other agents' actions as ground truth        
@@ -78,7 +80,7 @@ class SocialInfluenceMOAModule(nn.Module):
         # cross-entropy loss for each agent
         for agent in range(self.num_other_agents):
             agent_logits = reshaped_logits[:, agent, :]
-            agent_ground_truth = prev_other_act[:, agent]
+            agent_ground_truth = current_other_act[:, agent]
             loss = F.cross_entropy(agent_logits, agent_ground_truth)
             total_loss += loss
         average_loss = total_loss / self.num_other_agents                        

@@ -91,7 +91,7 @@ model:
     class_name: 'SocialInfluencePolicy'    
     args:
       reward_scale: 1.0
-      lr_scale: 1.0
+      moa_lr_scale: 0.09
       model_lr: 1e-4
       num_other_agents: 4
       action_dim: 9
