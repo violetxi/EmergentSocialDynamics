@@ -109,7 +109,7 @@ def plot_eval_metrics(result_path: str) -> None:
     # extracting model names and their corresponding rewards data
     model_names = [list(item.keys())[0] for item in data]
     model_rewards = [list(item.values())[0] for item in data]
-    formatted_model_names = [format_model_name(name) for name in model_names]
+    #formatted_model_names = [format_model_name(name) for name in model_names]
     # unordered_model_rewards = [list(item.values())[0] for item in data]
     # make sure models always plot in the same order even if they are not stored
     # model_rewards = []    
@@ -138,14 +138,25 @@ def plot_eval_metrics(result_path: str) -> None:
             ]
         average_ginis.append(np.mean(gini_values))
 
+    #breakpoint()
+    model_names2plot = ['ppo', 'icm', 'im_reward', 'social_influence_visible', 'SVO_hetero_75', 'SVO_homog_15']
+    model_labels = ['PPO', 'ICM', 'ICM Reward', 'Social Influence', 'SVO \nHeterogeneous', 'SVO \nHomogeneous']
+    # take subset of average returns and standard errors based on model_names2plot
+    average_returns = [avg_return for i, avg_return in enumerate(average_returns) if model_names[i] in model_names2plot]
+    standard_errors = [std_error for i, std_error in enumerate(standard_errors) if model_names[i] in model_names2plot]
+    # take subset of average gini coefficients based on model_names2plot
+    average_ginis = [avg_gini for i, avg_gini in enumerate(average_ginis) if model_names[i] in model_names2plot]
+    # take subset of model names based on model_names2plot
+    model_names = [model_name for model_name in model_names if model_name in model_names2plot]
+
     # Plotting using Seaborn
     sns.set_palette("colorblind")
-    rotation = 15
+    rotation = 0
     horizontal_alignment = 'center'
-    fig, axs = plt.subplots(1, 2, figsize=(15, 10))
+    fig, axs = plt.subplots(1, 2, figsize=(17, 10))
     # Subplot 1: Average total population return with standard error    
     sns.barplot(
-        x=formatted_model_names, 
+        x=model_names,#formatted_model_names, 
         y=average_returns, 
         yerr=standard_errors, 
         capsize=0.1, 
@@ -157,11 +168,11 @@ def plot_eval_metrics(result_path: str) -> None:
     axs[0].set_ylabel('Average Return')
     axs[0].set_xlabel('Model')
     axs[0].set_title("Population Return")
-    axs[0].set_xticklabels(formatted_model_names, rotation=rotation, ha=horizontal_alignment)
+    axs[0].set_xticklabels(model_labels, rotation=rotation, ha=horizontal_alignment)
 
     # Subplot 2: Average Gini coefficient
     sns.barplot(
-        x=formatted_model_names, 
+        x=model_names,#formatted_model_names, 
         y=average_ginis, 
         errorbar=None, 
         ax=axs[1], 
@@ -171,7 +182,7 @@ def plot_eval_metrics(result_path: str) -> None:
     axs[1].set_ylabel('Average Equity (1 - Gini Coefficient)')
     axs[1].set_xlabel('Model')
     axs[1].set_title("Population Equity")
-    axs[1].set_xticklabels(formatted_model_names, rotation=rotation, ha=horizontal_alignment)
+    axs[1].set_xticklabels(model_labels, rotation=rotation, ha=horizontal_alignment)
 
     plt.tight_layout()
     fig_path = os.path.join(
@@ -180,6 +191,265 @@ def plot_eval_metrics(result_path: str) -> None:
         )
     plt.savefig(fig_path)
 
+
+def plot_eval_metrics2(result_path: str) -> None:        
+    def compute_gini_coefficient_with_negative_rewards_shifted(rewards):
+        # compute Gini coefficient handling negative values by shifting the rewards 
+        # distribution to make all values positive
+        shift_value = abs(min(rewards)) + 1e-5  # small epsilon to ensure no zero value
+        shifted_rewards = [r + shift_value for r in rewards]        
+        # compute Gini coefficient for shifted rewards
+        sorted_rewards = sorted(shifted_rewards)
+        n = len(sorted_rewards)
+        numer = sum([(i + 1) * reward for i, reward in enumerate(sorted_rewards)])
+        denom = n * sum(sorted_rewards)        
+        if denom == 0:
+            return 0
+        else:
+            return (2 * numer / denom) - (n + 1) / n
+
+    # Load data from the pickle file
+    with open(result_path, 'rb') as f:
+        data = pd.read_pickle(f)    
+    # extracting model names and their corresponding rewards data
+    model_names = [list(item.keys())[0] for item in data]
+    model_rewards = [list(item.values())[0] for item in data]
+    #formatted_model_names = [format_model_name(name) for name in model_names]
+    # unordered_model_rewards = [list(item.values())[0] for item in data]
+    # make sure models always plot in the same order even if they are not stored
+    # model_rewards = []    
+    # for model in model_list:
+    #     if model in formatted_model_names:
+    #         model_idx = formatted_model_names.index(model)
+    #         model_rewards.append(unordered_model_rewards[model_idx])
+    
+    # compute average total population return and standard error for each model
+    average_returns = []
+    standard_errors = []
+    for rewards in model_rewards:
+        # Calculate total return for each episode
+        episode_totals = [sum([episode[agent].sum() for agent in episode]) for episode in rewards]        
+        # Compute average and standard error
+        average_returns.append(np.mean(episode_totals))
+        standard_errors.append(np.std(episode_totals) / np.sqrt(len(episode_totals)))
+    # Compute average Gini coefficient for each model
+    average_ginis = []
+    for rewards in model_rewards:
+        # get the difference between 1 and the Gini coefficient 
+        gini_values = [
+            1 - compute_gini_coefficient_with_negative_rewards_shifted([
+                episode[agent].sum() for agent in episode
+                ]) for episode in rewards
+            ]
+        average_ginis.append(np.mean(gini_values))
+
+    breakpoint()
+    model_names2plot = ['ppo', 'icm', 'im_reward', 'social_influence_visible', 'SVO_hetero_75', 'SVO_homog_15']
+    model_labels = ['PPO', 'ICM', 'ICM Reward', 'Social Influence', 'SVO \nHeterogeneous', 'SVO \nHomogeneous']
+    # take subset of average returns and standard errors based on model_names2plot
+    average_returns = [avg_return for i, avg_return in enumerate(average_returns) if model_names[i] in model_names2plot]
+    standard_errors = [std_error for i, std_error in enumerate(standard_errors) if model_names[i] in model_names2plot]
+    # take subset of average gini coefficients based on model_names2plot
+    average_ginis = [avg_gini for i, avg_gini in enumerate(average_ginis) if model_names[i] in model_names2plot]
+    # take subset of model names based on model_names2plot
+    model_names = [model_name for model_name in model_names if model_name in model_names2plot]
+
+    # Set plot aesthetics
+    sns.set_palette("colorblind")
+    rotation = 0
+    horizontal_alignment = 'center'
+
+    # Font size settings
+    label_fontsize = 28
+    title_fontsize = 40
+    tick_fontsize = 14
+
+    # Plot 1: Average total population return with standard error
+    fig1 = plt.figure(figsize=(10, 6))
+    sns.barplot(
+        x=model_names,
+        y=average_returns,
+        yerr=standard_errors,
+        capsize=0.1,
+        errorbar=None,
+        saturation=0.5
+    )
+    sns.despine()
+    plt.ylabel('Average Return', fontsize=label_fontsize)
+    plt.xlabel('Model', fontsize=label_fontsize)
+    plt.title("Population Return", fontsize=title_fontsize)
+    ticks = plt.xticks()[0]
+    plt.xticks(ticks=ticks, labels=model_labels, rotation=rotation, ha=horizontal_alignment, fontsize=tick_fontsize)
+    plt.yticks(fontsize=tick_fontsize)
+    plt.tight_layout()
+    fig1_path = os.path.join(
+        os.path.dirname(result_path),
+        os.path.basename(result_path).split('.')[0] + '_eval_metrics_return.png'
+    )
+    fig1.savefig(fig1_path)
+    
+    # Plot 2: Average Gini coefficient
+    fig2 = plt.figure(figsize=(10, 6))
+    sns.barplot(
+        x=model_names,
+        y=average_ginis,
+        errorbar=None,
+        saturation=0.5
+    )
+    sns.despine()
+    plt.ylabel('Equity (1 - Gini Coefficient)', fontsize=22)
+    plt.xlabel('Model', fontsize=label_fontsize)
+    plt.title("Population Equity", fontsize=title_fontsize)
+    ticks = plt.xticks()[0]
+    plt.xticks(ticks=ticks, labels=model_labels, rotation=rotation, ha=horizontal_alignment, fontsize=tick_fontsize)
+    plt.yticks(fontsize=tick_fontsize)
+    plt.tight_layout()
+    fig2_path = os.path.join(
+        os.path.dirname(result_path),
+        os.path.basename(result_path).split('.')[0] + '_eval_metrics_gini.png'
+    )
+    fig2.savefig(fig2_path)
+
+
+def plot_eval_metrics3(result_path: str) -> None:        
+    def compute_gini_coefficient_with_negative_rewards_shifted(rewards):
+        # compute Gini coefficient handling negative values by shifting the rewards 
+        # distribution to make all values positive
+        shift_value = abs(min(rewards)) + 1e-5  # small epsilon to ensure no zero value
+        shifted_rewards = [r + shift_value for r in rewards]        
+        # compute Gini coefficient for shifted rewards
+        sorted_rewards = sorted(shifted_rewards)
+        n = len(sorted_rewards)
+        numer = sum([(i + 1) * reward for i, reward in enumerate(sorted_rewards)])
+        denom = n * sum(sorted_rewards)        
+        if denom == 0:
+            return 0
+        else:
+            return (2 * numer / denom) - (n + 1) / n
+
+    # Load data from the pickle file
+    with open(result_path, 'rb') as f:
+        data = pd.read_pickle(f)    
+    # extracting model names and their corresponding rewards data
+    model_names = [list(item.keys())[0] for item in data]
+    model_rewards = [list(item.values())[0] for item in data]
+    #formatted_model_names = [format_model_name(name) for name in model_names]
+    # unordered_model_rewards = [list(item.values())[0] for item in data]
+    # make sure models always plot in the same order even if they are not stored
+    # model_rewards = []    
+    # for model in model_list:
+    #     if model in formatted_model_names:
+    #         model_idx = formatted_model_names.index(model)
+    #         model_rewards.append(unordered_model_rewards[model_idx])
+    
+    # compute average total population return and standard error for each model
+    average_returns = []
+    standard_errors = []
+    for rewards in model_rewards:
+        # Calculate total return for each episode
+        episode_totals = [sum([episode[agent].sum() for agent in episode]) for episode in rewards]        
+        # Compute average and standard error
+        average_returns.append(np.mean(episode_totals))
+        standard_errors.append(np.std(episode_totals) / np.sqrt(len(episode_totals)))
+    # Compute average Gini coefficient for each model
+    average_ginis = []
+    for rewards in model_rewards:
+        # get the difference between 1 and the Gini coefficient 
+        gini_values = [
+            1 - compute_gini_coefficient_with_negative_rewards_shifted([
+                episode[agent].sum() for agent in episode
+                ]) for episode in rewards
+            ]
+        average_ginis.append(np.mean(gini_values))
+
+    # Create a dictionary
+    data = {
+        'Model': model_names,
+        'Average Returns': average_returns,
+        'Standard Errors': standard_errors,
+        'Average Gini Coefficients': average_ginis
+    }
+    df = pd.DataFrame(data)
+    # Filter rows based on 'Model'
+    filtered_df = df[df['Model'].str.contains('SVO|svo', case=False)]
+    # Create a new column for 'Heterogeneous' or 'Homogeneous'
+    filtered_df['Type'] = ['Heterogeneous' if 'hetero' in model or 'heter' in model else 'Homogeneous' for model in filtered_df['Model']]
+    # Create a new column to hold the degree (the last number in the 'Model')
+    filtered_df['degree'] = filtered_df['Model'].str.extract(r'(\d+)$')[0].astype(int)
+    #model_labels = ['PPO', 'ICM', 'ICM Reward', 'Social Influence', 'SVO \nHeterogeneous', 'SVO \nHomogeneous']
+
+    # Sort the DataFrame by 'degree' and then by 'Type'
+    sorted_df = filtered_df.sort_values(by=['degree', 'Type'])
+    # Extract the sorted standard errors into a list
+    sorted_standard_errors = sorted_df['Standard Errors'].tolist()
+
+    # Set plot aesthetics
+    sns.set_palette("colorblind")
+    rotation = 0
+    horizontal_alignment = 'center'
+
+    # Font size settings
+    label_fontsize = 28
+    title_fontsize = 40
+    tick_fontsize = 14
+
+    # Plot 1: Average total population return with standard error
+    fig1 = plt.figure(figsize=(10, 6))
+    ax = sns.barplot(
+        data=filtered_df,
+        x='degree',
+        y='Average Returns',
+        hue='Type',
+        capsize=0.1,
+        errorbar=None,
+        saturation=0.5
+    )
+    sns.despine()
+    # Add error bars
+    for i, bar in enumerate(ax.patches):
+        x = bar.get_x() + bar.get_width() / 2.0
+        y = bar.get_height()
+        err = sorted_standard_errors[i]  # get the corresponding sorted error
+        plt.errorbar(x, y, yerr=err, color='black', capsize=3, fmt='none')
+
+    plt.ylabel('Population Return', fontsize=label_fontsize)
+    plt.xlabel('Social Value Orientation (\u00B0)', fontsize=label_fontsize)
+    plt.title("Return by Level of Altruism", fontsize=title_fontsize)
+    plt.xticks(rotation=rotation, ha=horizontal_alignment, fontsize=tick_fontsize)
+    plt.yticks(fontsize=tick_fontsize)
+    plt.legend(fontsize=18)
+    plt.tight_layout()
+    fig1_path = os.path.join(
+        os.path.dirname(result_path),
+        os.path.basename(result_path).split('.')[0] + '_eval_metrics_svo_by_degree.png'
+    )
+    fig1.savefig(fig1_path)
+
+    # Plot 2: Average Gini coefficient
+    fig2 = plt.figure(figsize=(10, 6))
+    ax = sns.barplot(
+        data=filtered_df,
+        x='degree',
+        y='Average Gini Coefficients',
+        hue='Type',
+        capsize=0.1,
+        errorbar=None,
+        saturation=0.5
+    )
+    sns.despine()
+    plt.ylabel('Equity (1 - Gini Coefficient)', fontsize=22)
+    plt.xlabel('Social Value Orientation (\u00B0)', fontsize=label_fontsize)
+    plt.title("Equity by Level of Altruism", fontsize=36)
+    plt.xticks(rotation=rotation, ha=horizontal_alignment, fontsize=tick_fontsize)
+    plt.yticks(fontsize=tick_fontsize)
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=14)
+    plt.tight_layout(rect=[0,0,0.8,1])
+    plt.tight_layout()
+    fig2_path = os.path.join(
+        os.path.dirname(result_path),
+        os.path.basename(result_path).split('.')[0] + '_eval_metrics_gini_by_degree.png'
+    )
+    fig2.savefig(fig2_path)
 
 
 def plot_avg_agent_return_with_std_error(result_path: str) -> None:

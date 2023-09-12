@@ -1,0 +1,30 @@
+program: main.py
+method: bayes # or 'random', 'grid' based on your preference
+
+metric:
+  name: test/best_reward # or any metric you are logging and want to optimize
+  goal: maximize # or 'maximize' based on the metric
+
+parameters:
+  agent.optim.ppo_lr:
+    distribution: uniform
+    min: 1e-5
+    max: 1e-3
+  agent.optim.wm_lr:
+    distribution: uniform
+    min: 1e-5
+    max: 1e-3
+  model.PPOPolicy.ent_coef:
+    distribution: uniform
+    min: 0.01
+    max: 0.25
+  model.IMPolicy.args.reward_scale:
+    distribution: uniform
+    min: 0.1
+    max: 5.0
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}

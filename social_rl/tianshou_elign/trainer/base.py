@@ -146,6 +146,7 @@ class BaseTrainer(ABC):
         train_fn: Optional[Callable[[int, int], None]] = None,
         test_fn: Optional[Callable[[int, Optional[int]], None]] = None,
         stop_fn: Optional[Callable[[float], bool]] = None,
+        early_stop: Optional[bool] = False,
         save_best_fn: Optional[Callable[[BasePolicy], None]] = None,
         save_checkpoint_fn: Optional[Callable[[int, int, int], str]] = None,
         resume_from_log: bool = False,
@@ -194,6 +195,7 @@ class BaseTrainer(ABC):
 
         self.train_fn = train_fn
         self.test_fn = test_fn
+        self.early_stop = early_stop
         self.stop_fn = stop_fn
         self.save_best_fn = save_best_fn
         self.save_checkpoint_fn = save_checkpoint_fn
@@ -385,13 +387,14 @@ class BaseTrainer(ABC):
             }
         else:
             test_stat = {}
-
-        # if no improvement after 25 epochs, stop training
-        if self.epoch - self.best_epoch > 25:
-            stop_fn_flag = True
-        # if best reward is negative after 100 epochs, stop training
-        if self.epoch > 100 and self.best_reward < 0:
-            stop_fn_flag = True
+        
+        if self.early_stop:
+            # if no improvement after 25 epochs, stop training
+            if self.epoch - self.best_epoch > 25:
+                stop_fn_flag = True
+            # if best reward is negative after 100 epochs, stop training
+            if self.epoch > 100 and self.best_reward < 0:
+                stop_fn_flag = True
         if self.stop_fn and self.stop_fn(self.best_reward):
             stop_fn_flag = True
 
