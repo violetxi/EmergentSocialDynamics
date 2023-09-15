@@ -222,11 +222,12 @@ class TrainRunner:
             )
         
     def preprocess_fn(self, obs):
-        """Preprocess observation in image format to tensor format in grayscale
+        """Preprocess observation in image format to tensor format
         used in collector
         :param obs: observation in image format (num_envs, )
         """
-        transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])        
+        #transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])        
+        transform = Compose([ToPILImage(), ToTensor(),])
         for i, env_ob in enumerate(obs):
             for agent_id, agent_ob in env_ob.items():
                 ob = agent_ob['observation']['curr_obs']
