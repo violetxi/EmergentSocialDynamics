@@ -396,15 +396,15 @@ class TrainRunner:
         with open(result_path, 'wb') as f:
             pickle.dump(existing_data, f)
         print(f"data saved to {result_path}..")
-        # create videos        
-        # for i, run_frames in enumerate(episode_frames):            
-        #     video_folder = os.path.join(
-        #         args.exp_run.result_dir, 
-        #         "frames", 
-        #         f"{model_name}_ep{i}"
-        #         )
-        #     ensure_dir(video_folder)
-        #     self.save_behavior_vis(run_frames, data[i], video_folder)
+        # save frames for video generation        
+        for i, run_frames in enumerate(episode_frames):            
+            video_folder = os.path.join(
+                args.exp_run.result_dir, 
+                "frames", 
+                f"{model_name}_ep{i}"
+                )
+            ensure_dir(video_folder)
+            self.save_behavior_vis(run_frames, data[i], video_folder)
 
     # Combine frames and reward curve horizontally
     def save_behavior_vis(
