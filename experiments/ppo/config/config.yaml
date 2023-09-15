@@ -23,7 +23,7 @@ wandb:
   project_name:  'esd'
 
 trainer:
-  max_epoch: 500
+  max_epoch: 200
   step_per_epoch: 5000    # number of train steps per epoch  
   repeat_per_collect: 10    # number of policy learning per collect
   test_eps: 2
