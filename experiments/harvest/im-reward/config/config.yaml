@@ -9,7 +9,7 @@ exp_run:
   buffer_size: 20_000
   # number of train and test envs in the vectorized environment
   train_env_num: 10
-  test_env_num: 1
+  test_env_num: 2
   logdir: 'logs'
   device: 'cuda'
   # ckpt_dir can be provided when continue to train or only doing evaluation
@@ -23,7 +23,7 @@ wandb:
   project_name: 'esd'
 
 trainer:
-  max_epoch: 200
+  max_epoch: 500
   step_per_epoch: 5000    # number of train steps per epoch  
   repeat_per_collect: 10    # number of policy learning per collect
   test_eps: 2
@@ -37,11 +37,11 @@ trainer:
 agent:
   optim:
     ppo_lr: 1e-4    # every model uses PPO
-    wm_lr: 1e-4    # this model doesn't use but have it as placeholder
+    wm_lr: 1e-4    # only some models will use this
 
 environment:
   base_env_kwargs:
-    env: 'cleanup'
+    env: 'harvest'
     num_agents: 5
     use_collective_reward: False
     inequity_averse_reward: False
@@ -52,11 +52,11 @@ environment:
   stack_num: 1    # this decides the number of observation stacked
   
 model:
-  name: svo_hetero-75
+  name: im_rew_gru
   net:
     module_path: 'social_rl.model.core'
     class_name: 'ConvGRU'
-    in_channels: 3
+    in_channels: 1
     out_channels: 6
     kernel_size: 3
     stride: 1
@@ -71,6 +71,7 @@ model:
     rnn_num_layers: 2
     rnn_batch_first: True
     output_dim: 64
+
 
   PPOPolicy:
     discount_factor: 0.99
@@ -87,11 +88,43 @@ model:
     recompute_advantage: 0
 
   IMPolicy:
-    module_path: 'social_rl.policy.svo_policy'
-    class_name: 'SVOPolicy'
-    svo_mean: 1.31    # 75
-    svo_std: 0.19    # pi/16
+    module_path: 'social_rl.policy.ic_reward_policy'
+    class_name: 'IMRewardPolicy'
+    # world model configuration
+    world_model:
+      # path to the model class
+      module_path: 'social_rl.model.ic_reward_pred_net'
+      class_name: 'IMRewardModule'
+      # path to the arguments of the model class
+      args:
+        # encoder network to encode obs to latent state
+        feature_net:
+          module_path: 'social_rl.model.core'
+          class_name: 'ConvGRUICM'
+          config:
+            in_channels: 1
+            out_channels: 6
+            kernel_size: 3
+            stride: 1
+            padding: 0
+            bias: True
+            flatten_dim: 1014
+            cnn_num_layers: 2
+            cnn_hidden_dim: 64
+            cnn_output_dim: 64    
+            rnn_input_size: 64
+            rnn_hidden_size: 128
+            rnn_num_layers: 2
+            rnn_batch_first: True
+            output_dim: 64
+      # required args for world model
+      kwargs:
+        feature_dim: 64
+        action_dim: 9
+        num_other_agents: 4
+        hidden_sizes: [64, 64]
+    # world model based policy args
     args:
-      reward_scale: 0.2      
-      svo: -1    # a place holder, will be updated
-      
+      lr_scale: 1.0
+      reward_scale: 1.0
+      forward_loss_weight: 1.0

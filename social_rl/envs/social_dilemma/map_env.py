@@ -325,7 +325,7 @@ class MapEnv:
         observation: dict of numpy ndarray
             the initial observation of the space. The initial reward is assumed
             to be zero.
-        """
+        """        
         self.beam_pos = []
         self.agents = {}
         self.setup_agents()

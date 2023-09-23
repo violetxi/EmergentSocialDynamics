@@ -227,17 +227,15 @@ class VectorEnv(BaseVectorEnv):
             return self._obs[id], self._rew[id], self._terminated[id], \
                 self._truncated[id], self._info[id]
 
-    def seed(self, seed: Optional[Union[int, List[int]]] = None) -> None:
+    def seed(self, seed: Optional[Union[int, List[int]]] = None) -> None:        
         if np.isscalar(seed):
             seed = [seed + _ for _ in range(self.env_num)]
         elif seed is None:
             seed = [seed] * self.env_num
         result = []
-        for e, s in zip(self.envs, seed):
+        for e, s in zip(self.envs, seed):            
             if hasattr(e, 'seed'):
-                # this is important because env is wrapped by pettingzoo
-                # parallel_env wrapper, where seed is only set in reset()
-                result.append(e.reset(seed=s))
+                e._env.seed(s)
         return result
 
     def render(self, **kwargs) -> None:

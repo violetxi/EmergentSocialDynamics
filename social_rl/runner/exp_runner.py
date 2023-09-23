@@ -226,8 +226,7 @@ class TrainRunner:
         used in collector
         :param obs: observation in image format (num_envs, )
         """
-        #transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])        
-        transform = Compose([ToPILImage(), ToTensor(),])
+        transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])        
         for i, env_ob in enumerate(obs):
             for agent_id, agent_ob in env_ob.items():
                 ob = agent_ob['observation']['curr_obs']

@@ -102,7 +102,7 @@ class parallel_env(ParallelEnv):
         the number of steps in the current episode.
         Returns the observations for each agent
         """
-        self.steps = 0        
+        self.steps = 0
         self.agents = self.possible_agents[:]        
         obs = self._env.reset()
         obs_out = {}
