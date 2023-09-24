@@ -1,43 +1,48 @@
+import os
 import cv2
 import numpy as np
-import envs.env_creator as env_creator
-from pettingzoo_env import parallel_env
+import matplotlib.pyplot as plt
+
+from social_rl.envs.social_dilemma.env_creator import get_env_creator
+from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
 
 
 def test_env_render(env_name):    
     env_args = dict(
         env=env_name,
-        num_agents=2,
+        num_agents=5,
         use_collective_reward=False,
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0
     )
     env = parallel_env(env_args, render_mode="rgb_array")
-    env.reset()
+    env.reset(seed=0)
     n_steps = 300
-    frames = []
+    # save frames
+    frame_folder = os.path.join("tests", env_name)
+    os.makedirs(frame_folder, exist_ok=True)
+    dpi_val = 300
     for step in range(n_steps):
-        actions = {}
-        for agent_id in env.agents:
-            actions[agent_id] = env._env.action_space.sample()    # parallel env
-            #actions[agent_id] = env.action_space.sample()    # raw env
-        #obs, rewards, done, info = env.step(actions)
-        obs, rewards, done, truncations, info = env.step(actions)
-        frames.append(env.render())
-        #print(f"Step: {step} | Obs: {obs} | Rewards: {rewards} | Done: {done} | Info: {info}")
-
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    w, h, c = frames[0].shape
-    out = cv2.VideoWriter(f'{env_name}.mp4', fourcc, 30.0, (w * 10, h * 10))
-    for frame in frames:
-        frame = cv2.resize(frame.astype(np.uint8), (w * 10, h * 10), interpolation=cv2.INTER_AREA)
-        # We write every frame to the output video file. We first ensure the frame is in the correct format
-        out.write(frame)
-
-    # Release the VideoWriter
-    out.release()
-
+        actions = [
+            env._env.action_space.sample() for agent_id in env.possible_agents
+            ]      
+        obs, rewards, done, truncations, info = env.step(actions)        
+        frame = env.render()
+        if step == 0:
+            print(f"environment {env_name} frame shape: {frame.shape}")
+        h, w, _ = frame.shape
+        h = h * 30
+        w = w * 30
+        fig_size_width = w / dpi_val
+        fig_size_height = h / dpi_val
+        frame_resize = cv2.resize(frame.astype(np.uint8), (w, h), interpolation=cv2.INTER_AREA)        
+        plt.figure(figsize=(fig_size_width, fig_size_height), dpi=dpi_val)
+        plt.imshow(frame_resize)
+        plt.axis('off')  # Hide the axis
+        filename = os.path.join(frame_folder, f'{step}.pdf')
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+        plt.close()
 
 
 if __name__ == "__main__":
