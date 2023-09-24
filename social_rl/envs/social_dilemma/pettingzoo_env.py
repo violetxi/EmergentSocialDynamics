@@ -93,7 +93,7 @@ class parallel_env(ParallelEnv):
                 infos[agent]['frame'] = []
         return infos
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, options=None):       
         """
         Reset needs to initialize the `agents` attribute and must set up the
         environment so that render(), and step() can be called without issues.
@@ -103,7 +103,10 @@ class parallel_env(ParallelEnv):
         Returns the observations for each agent
         """
         self.steps = 0
-        self.agents = self.possible_agents[:]        
+        self.agents = self.possible_agents[:]
+        if seed is not None:
+            self.seed = seed
+        self._env.seed(self.seed)
         obs = self._env.reset()
         obs_out = {}
         info = {}

@@ -9,7 +9,7 @@ exp_run:
   buffer_size: 20_000
   # number of train and test envs in the vectorized environment
   train_env_num: 10
-  test_env_num: 2
+  test_env_num: 1
   logdir: 'logs'
   device: 'cuda'
   # ckpt_dir can be provided when continue to train or only doing evaluation
@@ -20,10 +20,10 @@ exp_run:
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
   save_interval: 1
-  project_name: 'esd'
+  project_name: 'esd-harvest'
 
 trainer:
-  max_epoch: 500
+  max_epoch: 200
   step_per_epoch: 5000    # number of train steps per epoch  
   repeat_per_collect: 10    # number of policy learning per collect
   test_eps: 2
@@ -52,7 +52,7 @@ environment:
   stack_num: 1    # this decides the number of observation stacked
   
 model:
-  name: im_rew_gru
+  name: im_rew
   net:
     module_path: 'social_rl.model.core'
     class_name: 'ConvGRU'

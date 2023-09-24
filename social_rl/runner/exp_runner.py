@@ -75,7 +75,7 @@ class TrainRunner:
             seed + self.args.exp_run.train_env_num, 
             seed + self.args.exp_run.train_env_num + self.args.exp_run.test_env_num
             ))
-        self.test_envs.seed(test_env_seeds)        
+        self.test_envs.seed(test_env_seeds)     
 
     def _load_config(self) -> None:
         hydra_cfg = HydraConfig.get()

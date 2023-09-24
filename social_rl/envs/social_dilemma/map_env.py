@@ -357,7 +357,10 @@ class MapEnv:
         return observations
 
     def seed(self, seed=None):
-        np.random.seed(seed)
+        if seed is not None:
+            self.seed_val = seed
+        np.random.seed(self.seed_val)
+        
 
     def close(self):
         plt.close()

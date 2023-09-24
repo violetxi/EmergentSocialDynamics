@@ -90,7 +90,7 @@ class OnpolicyTrainer(BaseTrainer):
         train_fn: Optional[Callable[[int, int], None]] = None,
         test_fn: Optional[Callable[[int, Optional[int]], None]] = None,
         stop_fn: Optional[Callable[[float], bool]] = None,
-        early_stop: Optional[bool] = False,
+        early_stop: Optional[bool] = True,
         save_best_fn: Optional[Callable[[BasePolicy], None]] = None,
         save_checkpoint_fn: Optional[Callable[[int, int, int], str]] = None,
         resume_from_log: bool = False,

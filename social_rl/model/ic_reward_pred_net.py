@@ -63,16 +63,15 @@ class IMRewardModule(nn.Module):
 
     def forward(
         self, 
-        curr_obs: Union[np.ndarray, torch.Tensor], 
-        curr_act: Union[np.ndarray, torch.Tensor],
-        next_obs: Union[np.ndarray, torch.Tensor],
-        prev_other_act: Union[np.ndarray, torch.Tensor],
-        rew: Union[np.ndarray, torch.Tensor],
+        batch: Batch,        
         **kwargs: Any
         ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""Mapping: curr_obs, curr_act, next_obs -> mse_loss, pred_act."""
+        curr_act = batch.act
+        prev_other_act = batch.obs.observation.other_agent_actions
+        rew = batch.rew
         # features for current and next obs    
-        phi1, phi2 = self.feature_net(curr_obs), self.feature_net(next_obs)
+        phi1, phi2 = self.feature_net(batch.obs), self.feature_net(batch.obs_next)
         # representation for state+action
         curr_act = to_torch(curr_act, dtype=torch.long, device=self.device)
         phi2_hat = self.forward_model(

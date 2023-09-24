@@ -10,6 +10,7 @@ exp_run:
   # number of train and test envs in the vectorized environment
   train_env_num: 10
   test_env_num: 1
+  logdir: 'logs'
   device: 'cuda'
   # ckpt_dir can be provided when continue to train or only doing evaluation
   ckpt_dir: null
@@ -19,7 +20,7 @@ exp_run:
 wandb:
   update_interval: 1    # number of gradient steps for logging loss
   save_interval: 1
-  project_name:  'esd-harvest'
+  project_name: 'esd-harvest'
 
 trainer:
   max_epoch: 200
@@ -36,7 +37,7 @@ trainer:
 agent:
   optim:
     ppo_lr: 1e-4    # every model uses PPO
-    wm_lr: 1e-4    # only some models will use this
+    wm_lr: 1e-4    # this model doesn't use but have it as placeholder
 
 environment:
   base_env_kwargs:
@@ -51,7 +52,7 @@ environment:
   stack_num: 1    # this decides the number of observation stacked
   
 model:
-  name: icm_gru
+  name: svo_heter-15
   net:
     module_path: 'social_rl.model.core'
     class_name: 'ConvGRU'
@@ -86,42 +87,11 @@ model:
     recompute_advantage: 0
 
   IMPolicy:
-    module_path: 'tianshou.policy'
-    class_name: 'ICMPolicy'
-    # world model configuration
-    world_model:
-      # path to the model class
-      module_path: 'tianshou.utils.net.discrete'
-      class_name: 'IntrinsicCuriosityModule'
-      # path to the arguments of the model class
-      args:
-        # encoder network to encode obs to latent state
-        feature_net:
-          module_path: 'social_rl.model.core'
-          class_name: 'ConvGRUICM'
-          config:
-            in_channels: 1
-            out_channels: 6
-            kernel_size: 3
-            stride: 1
-            padding: 0
-            bias: True
-            flatten_dim: 1014
-            cnn_num_layers: 2
-            cnn_hidden_dim: 64
-            cnn_output_dim: 64    
-            rnn_input_size: 64
-            rnn_hidden_size: 128
-            rnn_num_layers: 2
-            rnn_batch_first: True
-            output_dim: 64
-      # required args for world model
-      kwargs:
-        feature_dim: 64
-        action_dim: 9
-        hidden_sizes: [64, 64]
-    # world model based policy args
+    module_path: 'social_rl.policy.svo_policy'
+    class_name: 'SVOPolicy'
+    svo_mean: 0.26    # 15
+    svo_std: 0.098    # pi/32
     args:
-      lr_scale: 1.0
-      reward_scale: 1.0
-      forward_loss_weight: 1.0
+      reward_scale: 0.2      
+      svo: -1    # a place holder, will be updated
+      

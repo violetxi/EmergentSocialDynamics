@@ -83,15 +83,8 @@ class IMRewardPolicy(BasePolicy):
         """Pre-process the data from the provided replay buffer.
 
         Used in :meth:`update`. Check out :ref:`process_fn` for more information.
-        """
-        curr_obs = batch.obs.observation.curr_obs
-        curr_act = batch.act
-        next_obs = batch.obs_next.observation.curr_obs
-        prev_other_act = batch.obs.observation.other_agent_actions
-        rew = batch.rew
-        forward_mse_loss, rew_mse_loss, act_hat = self.model(
-            curr_obs, curr_act, next_obs, prev_other_act, rew
-            )
+        """        
+        forward_mse_loss, rew_mse_loss, act_hat = self.model(batch)
         batch.policy = Batch(
             orig_rew=batch.rew, 
             act_hat=act_hat, 

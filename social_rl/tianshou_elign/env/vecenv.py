@@ -233,9 +233,8 @@ class VectorEnv(BaseVectorEnv):
         elif seed is None:
             seed = [seed] * self.env_num
         result = []
-        for e, s in zip(self.envs, seed):            
-            if hasattr(e, 'seed'):
-                e._env.seed(s)
+        for e, s in zip(self.envs, seed):
+            e.reset(seed=s)            
         return result
 
     def render(self, **kwargs) -> None:
