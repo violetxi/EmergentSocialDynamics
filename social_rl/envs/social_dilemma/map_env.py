@@ -143,7 +143,8 @@ class MapEnv:
             'effective_clean_beam': 0,
         }
         for agent_id in self.agents.keys():
-            self.agent_behavior[agent_id] = deepcopy(self.behavior_dict) 
+            self.agent_behavior[agent_id] = deepcopy(self.behavior_dict)
+        
     @property
     def observation_space(self):
         obs_space = {
