@@ -37,6 +37,8 @@ class CleanupEnv(MapEnv):
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
+        # @TODO: make this conditioned on eval_only in config
+        track_individual_info=True, # this is true as we always try to track individual info during evaluation
     ):
         super().__init__(
             ascii_map,
@@ -48,6 +50,7 @@ class CleanupEnv(MapEnv):
             inequity_averse_reward=inequity_averse_reward,
             alpha=alpha,
             beta=beta,
+            track_individual_info=track_individual_info,
         )
 
         # compute potential waste area
@@ -106,6 +109,7 @@ class CleanupEnv(MapEnv):
                 self.all_actions["FIRE"],
                 fire_char=b"F",
             )
+            self.agent_behavior[agent.agent_id]['aggro_beam'] += 1            
         elif action == "CLEAN":
             agent.fire_beam(b"C")
             updates = self.update_map_fire(
@@ -117,6 +121,10 @@ class CleanupEnv(MapEnv):
                 update_char=[b"R"],
                 blocking_cells=[b"H"],
             )
+            if len(updates) > 0:
+                self.agent_behavior[agent.agent_id]['effective_clean_beam'] += 1
+            else:
+                self.agent_behavior[agent.agent_id]['useless_clean_beam'] += 1
         return updates
 
     def custom_map_update(self):
@@ -133,7 +141,7 @@ class CleanupEnv(MapEnv):
             agent_id = "agent_" + str(i)
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()            
-            print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
+            #print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
             # grid = util.return_view(map_with_agents, spawn_point,
             #                         CLEANUP_VIEW_SIZE, CLEANUP_VIEW_SIZE)
             # agent = CleanupAgent(agent_id, spawn_point, rotation, grid)

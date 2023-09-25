@@ -1,6 +1,7 @@
 """Base map class that defines the rendering process
 """
 
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
 from gym.spaces import Box, Dict
@@ -69,6 +70,8 @@ class MapEnv:
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
+        # @TODO: should only be true for cleanup
+        track_individual_info=True,
     ):
         """
         Parameters
@@ -94,6 +97,7 @@ class MapEnv:
         self.inequity_averse_reward = inequity_averse_reward
         self.alpha = alpha
         self.beta = beta
+        self.track_individual_info = track_individual_info
         self.all_actions = _MAP_ENV_ACTIONS.copy()
         self.all_actions.update(extra_actions)
         # Map without agents or beams
@@ -124,7 +128,22 @@ class MapEnv:
                 elif self.base_map[row, col] == b"@":
                     self.wall_points.append([row, col])
         self.setup_agents()
+        # to track of agent's behavior pattern through out an episode
+        if self.track_individual_info:
+            self.setup_agent_behavior_tracker()
 
+    def setup_agent_behavior_tracker(self):        
+        self.agent_behavior = {}
+        self.behavior_dict = {
+            'invalid_action': 0,
+            'apple_eaten': 0,
+            'not_eating_low_hanging_apple': 0,
+            'aggro_beam': 0,
+            'useless_clean_beam': 0,
+            'effective_clean_beam': 0,
+        }
+        for agent_id in self.agents.keys():
+            self.agent_behavior[agent_id] = deepcopy(self.behavior_dict) 
     @property
     def observation_space(self):
         obs_space = {
@@ -241,7 +260,7 @@ class MapEnv:
         for agent_id, action in actions.items():
             agent_action = self.agents[agent_id].action_map(action)
             agent_actions[agent_id] = agent_action
-
+        
         # Remove agents from color map
         for agent in self.agents.values():
             row, col = agent.pos[0], agent.pos[1]
@@ -252,11 +271,13 @@ class MapEnv:
         for agent in self.agents.values():
             pos = agent.pos
             new_char = agent.consume(self.world_map[pos[0], pos[1]])
+            """agent behavior tracking: apple eaten"""
+            if self.world_map[pos[0], pos[1]] == b"A" and new_char == b" ":
+                self.agent_behavior[agent.agent_id]['apple_eaten'] += 1
             self.single_update_map(pos[0], pos[1], new_char)
 
         # execute custom moves like firing
-        self.update_custom_moves(agent_actions)
-
+        self.update_custom_moves(agent_actions)        
         # execute spawning events
         self.custom_map_update()
 
@@ -330,6 +351,9 @@ class MapEnv:
         self.setup_agents()
         self.reset_map()
         self.custom_map_update()
+        # reset agent behavior tracker
+        if self.track_individual_info:
+            self.setup_agent_behavior_tracker()
 
         map_with_agents = self.get_map_with_agents()
 
@@ -486,7 +510,7 @@ class MapEnv:
                 plt.savefig(filename)
             return None
         return rgb_arr
-
+        
     def update_moves(self, agent_actions):
         """Converts agent action tuples into a new map and new agent positions.
          Also resolves conflicts over multiple agents wanting a cell.
@@ -511,8 +535,21 @@ class MapEnv:
         reserved_slots = []
         for agent_id, action in agent_actions.items():
             agent = self.agents[agent_id]
-            selected_action = self.all_actions[action]
-            # TODO(ev) these two parts of the actions
+            selected_action = self.all_actions[action] 
+            """Tracking agent behaviors: not eating low hanging apple"""
+            # check if there is an apple immediately available for next step
+            # and if action will lead agent to an apple
+            apple_actions = []
+            for move_action in ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"]:
+                # rot_action = self.rotate_action(selected_action, agent.get_orientation())
+                # pos = agent.pos + rot_action
+                pos = agent.pos + self.rotate_action(self.all_actions[move_action], agent.get_orientation())
+                if self.world_map[pos[0], pos[1]] == b"A":
+                    apple_actions.append(move_action)
+            if len(apple_actions) > 0 and action not in apple_actions:
+                self.agent_behavior[agent_id]["not_eating_low_hanging_apple"] += 1
+
+            # TODO(ev) these two parts of the actions            
             if "MOVE" in action or "STAY" in action:
                 # rotate the selected action appropriately
                 rot_action = self.rotate_action(selected_action, agent.get_orientation())
@@ -520,18 +557,19 @@ class MapEnv:
                 # allow the agents to confirm what position they can move to
                 new_pos = agent.return_valid_pos(new_pos)
                 reserved_slots.append((*new_pos, b"P", agent_id))
+                """Tracking agent behaviors: making invalid move"""
+                if np.all(new_pos == agent.pos) and "MOVE" in action:
+                    self.agent_behavior[agent_id]["invalid_action"] += 1
+
             elif "TURN" in action:
                 new_rot = self.update_rotation(action, agent.get_orientation())
                 agent.update_agent_rot(new_rot)
 
         # now do the conflict resolution part of the process
-
         # helpful for finding the agent in the conflicting slot
         agent_by_pos = {tuple(agent.pos): agent.agent_id for agent in self.agents.values()}
-
         # agent moves keyed by ids
         agent_moves = {}
-
         # lists of moves and their corresponding agents
         move_slots = []
         agent_to_slot = []
@@ -546,10 +584,8 @@ class MapEnv:
 
         # cut short the computation if there are no moves
         if len(agent_to_slot) > 0:
-
             # first we will resolve all slots over which multiple agents
             # want the slot
-
             # shuffle so that a random agent has slot priority
             shuffle_list = list(zip(agent_to_slot, move_slots))
             np.random.shuffle(shuffle_list)
@@ -625,7 +661,7 @@ class MapEnv:
                         remove_indices = np.where((search_list == move).all(axis=1))[0]
                         all_agents_id = [agent_to_slot[i] for i in remove_indices]
                         # all other agents now stay in place so update their moves
-                        # to stay in place
+                        # to stay in place                        
                         for agent_id in all_agents_id:
                             agent_moves[agent_id] = self.agents[agent_id].pos.tolist()
 
