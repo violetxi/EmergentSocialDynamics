@@ -133,7 +133,7 @@ class CleanupEnv(MapEnv):
             agent_id = "agent_" + str(i)
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()            
-            #print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
+            print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
             # grid = util.return_view(map_with_agents, spawn_point,
             #                         CLEANUP_VIEW_SIZE, CLEANUP_VIEW_SIZE)
             # agent = CleanupAgent(agent_id, spawn_point, rotation, grid)

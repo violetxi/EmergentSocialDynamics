@@ -71,7 +71,6 @@ class MapEnv:
         beta=0.0,
     ):
         """
-
         Parameters
         ----------
         ascii_map: list of strings
@@ -356,11 +355,8 @@ class MapEnv:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr}
         return observations
 
-    def seed(self, seed=None):
-        if seed is not None:
-            self.seed_val = seed
-        np.random.seed(self.seed_val)
-        
+    def seed(self, seed):
+        np.random.seed(seed)
 
     def close(self):
         plt.close()
