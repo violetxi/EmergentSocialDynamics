@@ -109,14 +109,6 @@ def plot_eval_metrics(result_path: str) -> None:
     # extracting model names and their corresponding rewards data
     model_names = [list(item.keys())[0] for item in data]
     model_rewards = [list(item.values())[0] for item in data]
-    #formatted_model_names = [format_model_name(name) for name in model_names]
-    # unordered_model_rewards = [list(item.values())[0] for item in data]
-    # make sure models always plot in the same order even if they are not stored
-    # model_rewards = []    
-    # for model in model_list:
-    #     if model in formatted_model_names:
-    #         model_idx = formatted_model_names.index(model)
-    #         model_rewards.append(unordered_model_rewards[model_idx])
     
     # compute average total population return and standard error for each model
     average_returns = []
@@ -142,6 +134,7 @@ def plot_eval_metrics(result_path: str) -> None:
     model_names2plot = ['ppo', 'icm', 'im_reward', 'social_influence_visible', 'SVO_hetero_75', 'SVO_homog_15']
     model_labels = ['PPO', 'ICM', 'ICM Reward', 'Social Influence', 'SVO \nHeterogeneous', 'SVO \nHomogeneous']
     # take subset of average returns and standard errors based on model_names2plot
+    print(average_returns, model_names)
     average_returns = [avg_return for i, avg_return in enumerate(average_returns) if model_names[i] in model_names2plot]
     standard_errors = [std_error for i, std_error in enumerate(standard_errors) if model_names[i] in model_names2plot]
     # take subset of average gini coefficients based on model_names2plot
@@ -234,6 +227,7 @@ def plot_eval_metrics2(result_path: str) -> None:
         standard_errors.append(np.std(episode_totals) / np.sqrt(len(episode_totals)))
     # Compute average Gini coefficient for each model
     average_ginis = []
+    standard_errors_gini = []
     for rewards in model_rewards:
         # get the difference between 1 and the Gini coefficient 
         gini_values = [
@@ -242,18 +236,32 @@ def plot_eval_metrics2(result_path: str) -> None:
                 ]) for episode in rewards
             ]
         average_ginis.append(np.mean(gini_values))
-
+        standard_errors_gini.append(np.std(gini_values) / np.sqrt(len(gini_values)))
+        
+    model_names2plot = {
+        'ppo': 'PPO',
+        'im_reward': 'ICM Reward',
+        'icm': 'ICM',        
+        'social_influence_visible': 'Social Influence',
+        'SVO_hetero_75': 'SVO \nHeterogeneous',
+        'SVO_homog_30': 'SVO \nHomogeneous'
+    }
     breakpoint()
-    model_names2plot = ['ppo', 'icm', 'im_reward', 'social_influence_visible', 'SVO_hetero_75', 'SVO_homog_15']
-    model_labels = ['PPO', 'ICM', 'ICM Reward', 'Social Influence', 'SVO \nHeterogeneous', 'SVO \nHomogeneous']
     # take subset of average returns and standard errors based on model_names2plot
-    average_returns = [avg_return for i, avg_return in enumerate(average_returns) if model_names[i] in model_names2plot]
-    standard_errors = [std_error for i, std_error in enumerate(standard_errors) if model_names[i] in model_names2plot]
-    # take subset of average gini coefficients based on model_names2plot
-    average_ginis = [avg_gini for i, avg_gini in enumerate(average_ginis) if model_names[i] in model_names2plot]
-    # take subset of model names based on model_names2plot
-    model_names = [model_name for model_name in model_names if model_name in model_names2plot]
-
+    average_returns_plot = []
+    standard_errors_plot = []
+    average_ginis_plot = []
+    standard_errors_gini_plot = []    
+    #for i, avg_return in enumerate(average_returns):
+    for model_name in model_names2plot.keys():
+        i = model_names.index(model_name)                
+        average_returns_plot.append(average_returns[i])
+        standard_errors_plot.append(standard_errors[i])
+        average_ginis_plot.append(average_ginis[i])
+        standard_errors_gini_plot.append(standard_errors_gini[i])
+    model_names_plot = list(model_names2plot.keys())
+    model_labels = list(model_names2plot.values())
+    
     # Set plot aesthetics
     sns.set_palette("colorblind")
     rotation = 0
@@ -267,9 +275,9 @@ def plot_eval_metrics2(result_path: str) -> None:
     # Plot 1: Average total population return with standard error
     fig1 = plt.figure(figsize=(10, 6))
     sns.barplot(
-        x=model_names,
-        y=average_returns,
-        yerr=standard_errors,
+        x=model_names_plot,
+        y=average_returns_plot,
+        yerr=standard_errors_plot,
         capsize=0.1,
         errorbar=None,
         saturation=0.5
@@ -291,8 +299,9 @@ def plot_eval_metrics2(result_path: str) -> None:
     # Plot 2: Average Gini coefficient
     fig2 = plt.figure(figsize=(10, 6))
     sns.barplot(
-        x=model_names,
-        y=average_ginis,
+        x=model_names_plot,
+        y=average_ginis_plot,
+        yerr=standard_errors_gini_plot,
         errorbar=None,
         saturation=0.5
     )
