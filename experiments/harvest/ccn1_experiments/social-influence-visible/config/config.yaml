@@ -1,0 +1,104 @@
+hydra:
+  run:
+    dir: outputs/${model.name}-${environment.base_env_kwargs.env}-${environment.base_env_kwargs.num_agents}_agents/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+
+exp_run:
+  seed: 1626
+  # buffer size is multiplied by number of train envs in the vectorized environment
+  buffer_size: 20_000
+  # number of train and test envs in the vectorized environment
+  train_env_num: 10
+  test_env_num: 1
+  logdir: 'logs'
+  device: 'cuda'
+  # ckpt_dir can be provided when continue to train or only doing evaluation
+  ckpt_dir: null
+  eval_only: False
+  result_dir: /ccn2/u/ziyxiang/EmergentSocialDynamics/results
+
+wandb:
+  update_interval: 1    # number of gradient steps for logging loss
+  save_interval: 1
+  project_name: 'esd-harvest'
+
+trainer:
+  max_epoch: 500
+  step_per_epoch: 5000    # number of train steps per epoch  
+  repeat_per_collect: 10    # number of policy learning per collect
+  test_eps: 2
+  batch_size: 2048
+  # the following are divided by number of envs in the vectorized environment
+  step_per_collect: 2000    # number of transitions collected for all train envs
+  episode_per_collect: null    # non means use step_per_collect, vice versa
+  stop_fn:
+    reward_threshold: 4500
+  
+agent:
+  optim:
+    ppo_lr: 1e-4    # every model uses PPO
+    wm_lr: 1e-4    # this model doesn't use but have it as placeholder
+
+environment:
+  base_env_kwargs:
+    env: 'harvest'
+    num_agents: 5
+    use_collective_reward: False
+    inequity_averse_reward: False
+    alpha: 0.0
+    beta: 0.0
+  max_cycles: 1000    # this decides length of an episode
+  render_mode: rgb_array
+  stack_num: 1    # this decides the number of observation stacked
+  
+model:
+  name: social_influence_visible
+  net:
+    module_path: 'social_rl.model.core'
+    class_name: 'ConvGRU'
+    in_channels: 1
+    out_channels: 6
+    kernel_size: 3
+    stride: 1
+    padding: 0
+    bias: True
+    flatten_dim: 1014
+    cnn_num_layers: 2
+    cnn_hidden_dim: 64
+    cnn_output_dim: 64    
+    rnn_input_size: 64
+    rnn_hidden_size: 128
+    rnn_num_layers: 2
+    rnn_batch_first: True
+    output_dim: 64
+
+  PPOPolicy:
+    discount_factor: 0.99
+    max_grad_norm: 0.5
+    eps_clip: 0.2
+    vf_coef: 0.5
+    ent_coef: 0.1    # key hyperparameter to tune
+    gae_lambda: 0.95
+    reward_normalization: 0
+    dual_clip: null
+    value_clip: 0
+    deterministic_eval: True
+    advantage_normalization: 0
+    recompute_advantage: 0
+
+  IMPolicy:
+    module_path: 'social_rl.policy.social_influence_policy'
+    class_name: 'SocialInfluencePolicy'    
+    args:
+      reward_scale: 1.0
+      moa_lr_scale: 0.09
+      model_lr: 1e-4
+      num_other_agents: 4
+      action_dim: 8
+      flatten_dim: 1014
+      cnn_hidden_dim: 64
+      cnn_output_dim: 64
+      rnn_hidden_size: 128
+      rnn_num_layers: 2
+      influence_only_when_visible: True
+      

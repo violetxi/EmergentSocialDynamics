@@ -5,6 +5,7 @@ import pickle
 import datetime
 import argparse
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
 from copy import deepcopy
@@ -106,7 +107,8 @@ class TrainRunner:
         return VectorEnv(vec_envs)
 
     def _setup_env(self) -> None:        
-        # this is just a dummpy for setting up other things later        
+        # this is just a dummpy for setting up other things later
+        self.env_name = self.env_config['base_env_kwargs']['env']       
         seed = self.args.exp_run.seed
         train_env_seeds = list(range(seed, seed + self.args.exp_run.train_env_num))        
         test_env_seeds = list(range(
@@ -342,7 +344,22 @@ class TrainRunner:
             render_mode='rgb_array'
             )
         step_agent_reward = np.array(eval_result.pop('step_agent_rews'))
-        frames = eval_result.pop('frames')        
+        # save agent behavior details for cleanup only    
+        if self.env_name == 'cleanup':
+            output_dir = os.path.join(
+                args.exp_run.result_dir, 'agent_info', self.env_name, args.model.name
+                )
+            ensure_dir(output_dir)
+            agent_infos = eval_result.pop('agent_info')
+            for idx, agent_info in enumerate(agent_infos):                
+                filename = os.path.join(
+                    output_dir, 
+                    f"{args.model.name}-episode_{idx + 1}.csv"
+                    )                
+                df = pd.DataFrame.from_dict(agent_info[0], orient='index')
+                df.to_csv(filename)
+
+        frames = eval_result.pop('frames')
         self.save_results(step_agent_reward, frames, ckpt_dir)
         print(f"\n========== Eval after training ==========\n{eval_result}")
 
@@ -379,12 +396,7 @@ class TrainRunner:
             args.exp_run.result_dir, f"{task_name}_{num_agents}agents.pkl"
             )
         # get model name and hyperparam
-        model_name = args.model.name
-        sweep_config = OmegaConf.load(
-            os.path.join(ckpt_dir, '.hydra', 'overrides.yaml')
-            )        
-        # for sweep_args in sweep_config:
-        #     model_name += f"-{sweep_args}"
+        model_name = args.model.name    
         print(model_name)
         data = self._convert_save_data(data)    
         # save single model result

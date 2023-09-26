@@ -200,8 +200,7 @@ class parallel_env(ParallelEnv):
             # terminations and truncations are the same for all agents, keep one per
             # env to be compatible with TianShou Buffer processes
             terminations_out.append(terminations[agent_id]) 
-            truncations_out.append(False) # no truncation in SSD
-            info[agent_id] = {}                
+            truncations_out.append(False) # no truncation in SSD           
         # stack observations and actions if asked for                   
         if self.stack_num > 1:
             self.stack_obs(obs, obs_out)            

@@ -289,11 +289,11 @@ class Collector(object):
         if n_episode is not None:
             frames = [[] for _ in range(n_episode)]
             step_agent_rews = [[] for _ in range(n_episode)]
-            step_agent_intr_rews = [[] for _ in range(n_episode)]
+            agent_info = []            
         else:
             frames = [[] for _ in range(self.env_num)]
             step_agent_rews = [[] for _ in range(self.env_num)]
-            step_agent_intr_rews = [[] for _ in range(self.env_num)]
+            agent_info = []
 
         while True:
             assert len(self.data) == len(ready_env_ids)
@@ -339,7 +339,7 @@ class Collector(object):
             obs_next, rew, terminated, truncated, info = self.env.step(
                 action_remap,  # type: ignore
                 ready_env_ids
-            )
+            )            
             # organize step_agent_rews as (num_episode, n_ep_steps, rew_shape)                       
             for i, r in enumerate(rew):
                 if n_episode is not None:
@@ -362,7 +362,6 @@ class Collector(object):
                 obs_next = self.preprocess_fn(obs=obs_next)
                 self.data.obs_next = obs_next         
                 
-
             if render_mode == "rgb_array":
                 # organize frames as (num_episode, n_ep_steps, frames_shape)
                 frame = self.env.render()               
@@ -410,6 +409,7 @@ class Collector(object):
                         mask[env_ind_local[-surplus_env_num:]] = False
                         ready_env_ids = ready_env_ids[mask]
                         self.data = self.data[mask]
+                agent_info.append(info)
 
             self.data.obs = self.data.obs_next
 
@@ -459,8 +459,9 @@ class Collector(object):
             "len": len_mean,
             "rew_std": rew_std,
             "len_std": len_std,
-            "step_agent_rews": step_agent_rews
-        }
+            "step_agent_rews": step_agent_rews,
+            'agent_info': agent_info    # agent_behavior tracking
+        }        
         # store rendered frames
         if render_mode == "rgb_array":
             output["frames"] = frames        

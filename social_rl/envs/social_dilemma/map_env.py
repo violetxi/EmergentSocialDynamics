@@ -134,8 +134,7 @@ class MapEnv:
         self.setup_agents()
         # to track of agent's behavior pattern through out an episode
         if self.track_individual_info:
-            self.setup_agent_behavior_tracker()
-        
+            self.setup_agent_behavior_tracker()        
 
     def setup_agent_behavior_tracker(self):        
         self.agent_behavior = {}
@@ -320,8 +319,11 @@ class MapEnv:
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr}
             rewards[agent.agent_id] = agent.compute_reward()
-            dones[agent.agent_id] = agent.get_done()
-            infos[agent.agent_id] = {}
+            dones[agent.agent_id] = agent.get_done()            
+            if self.track_individual_info:
+                infos[agent.agent_id] = self.agent_behavior[agent.agent_id]
+            else:
+                infos[agent.agent_id] = {}
 
         if self.use_collective_reward:
             collective_reward = sum(rewards.values())
@@ -337,7 +339,7 @@ class MapEnv:
                 temp_rewards[agent] -= (dis_inequity + adv_inequity) / (self.num_agents - 1)
             rewards = temp_rewards
 
-        dones["__all__"] = np.any(list(dones.values()))
+        dones["__all__"] = np.any(list(dones.values()))        
         return observations, rewards, dones, infos
 
     def reset(self):
@@ -358,7 +360,7 @@ class MapEnv:
         self.reset_map()
         self.custom_map_update()
         # reset agent behavior tracker
-        if self.track_individual_info:
+        if self.track_individual_info:            
             self.setup_agent_behavior_tracker()
 
         map_with_agents = self.get_map_with_agents()
