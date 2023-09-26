@@ -349,7 +349,6 @@ class Collector(object):
                 step_agent_rews[idx].append(deepcopy(r))
             
             done = np.logical_or(terminated, truncated)
-
             self.data.update(
                 obs_next=obs_next,
                 rew=rew,
@@ -357,7 +356,7 @@ class Collector(object):
                 truncated=truncated,
                 done=done,
                 info=info
-            )            
+            )
             if self.preprocess_fn:                
                 obs_next = self.preprocess_fn(obs=obs_next)
                 self.data.obs_next = obs_next         
@@ -448,6 +447,12 @@ class Collector(object):
         else:
             rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
             rew_mean = rew_std = len_mean = len_std = 0
+
+        # add reward information to agent_info
+        for i, info in enumerate(agent_info):
+            agent_rews = rews[i]
+            for n, agent_rew in enumerate(agent_rews):
+                info[0][f'agent_{n}']['reward'] = agent_rew
 
         output = {
             "n/ep": episode_count,
