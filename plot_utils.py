@@ -8,9 +8,6 @@ from typeguard import typechecked
 
 from social_rl.utils.utils import ensure_dir
 
-# order of models so color is consistent
-model_list = ['ppo', 'ppo_gru', 'icm_gru','im_rew_gru', 'svo_gru', 'social_influence_gru']
-
 
 # format model names
 def format_model_name(name, verbose=False):
@@ -207,14 +204,6 @@ def plot_eval_metrics2(result_path: str) -> None:
     # extracting model names and their corresponding rewards data
     model_names = [list(item.keys())[0] for item in data]
     model_rewards = [list(item.values())[0] for item in data]
-    #formatted_model_names = [format_model_name(name) for name in model_names]
-    # unordered_model_rewards = [list(item.values())[0] for item in data]
-    # make sure models always plot in the same order even if they are not stored
-    # model_rewards = []    
-    # for model in model_list:
-    #     if model in formatted_model_names:
-    #         model_idx = formatted_model_names.index(model)
-    #         model_rewards.append(unordered_model_rewards[model_idx])
     
     # compute average total population return and standard error for each model
     average_returns = []
@@ -246,7 +235,6 @@ def plot_eval_metrics2(result_path: str) -> None:
         'SVO_hetero_75': 'SVO \nHeterogeneous',
         'SVO_homog_30': 'SVO \nHomogeneous'
     }
-    breakpoint()
     # take subset of average returns and standard errors based on model_names2plot
     average_returns_plot = []
     standard_errors_plot = []
@@ -342,15 +330,7 @@ def plot_eval_metrics3(result_path: str) -> None:
     # extracting model names and their corresponding rewards data
     model_names = [list(item.keys())[0] for item in data]
     model_rewards = [list(item.values())[0] for item in data]
-    #formatted_model_names = [format_model_name(name) for name in model_names]
-    # unordered_model_rewards = [list(item.values())[0] for item in data]
-    # make sure models always plot in the same order even if they are not stored
-    # model_rewards = []    
-    # for model in model_list:
-    #     if model in formatted_model_names:
-    #         model_idx = formatted_model_names.index(model)
-    #         model_rewards.append(unordered_model_rewards[model_idx])
-    
+
     # compute average total population return and standard error for each model
     average_returns = []
     standard_errors = []
@@ -475,7 +455,6 @@ def plot_avg_agent_return_with_std_error(result_path: str) -> None:
                         avg_returns[model][agent].append(np.sum(rewards))  # Sum of rewards for each episode
         # Calculate average return and standard error for each model
         for model, agents in avg_returns.items():
-        # for model in model_list:
             agents = avg_returns[model]
             for agent, rewards in agents.items():
                 avg_returns[model][agent] = (np.mean(rewards), np.std(rewards) / np.sqrt(len(rewards)))  # Average return and standard error
