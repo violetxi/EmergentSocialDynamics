@@ -227,14 +227,24 @@ def plot_eval_metrics2(result_path: str) -> None:
         average_ginis.append(np.mean(gini_values))
         standard_errors_gini.append(np.std(gini_values) / np.sqrt(len(gini_values)))
         
-    model_names2plot = {
-        'ppo': 'PPO',
-        'im_reward': 'ICM Reward',
-        'icm': 'ICM',        
-        'social_influence_visible': 'Social Influence',
-        'SVO_hetero_75': 'SVO \nHeterogeneous',
-        'SVO_homog_30': 'SVO \nHomogeneous'
-    }
+    if 'clean' in result_path:
+        model_names2plot = {
+            'ppo': 'PPO',
+            'im_reward': 'ICM Reward',
+            'icm': 'ICM',        
+            'social_influence_visible': 'Social Influence',
+            'SVO_hetero_75': 'SVO \nHeterogeneous',
+            'SVO_homog_30': 'SVO \nHomogeneous'
+        }
+    elif 'harvest' in result_path:
+        model_names2plot = {
+            'ppo': 'PPO',
+            'im_reward': 'ICM Reward',
+            'icm': 'ICM',        
+            'social_influence_visible': 'Social Influence',
+            'SVO_hetero_15': 'SVO \nHeterogeneous',
+            'SVO_homog_30': 'SVO \nHomogeneous'
+        }
     # take subset of average returns and standard errors based on model_names2plot
     average_returns_plot = []
     standard_errors_plot = []
