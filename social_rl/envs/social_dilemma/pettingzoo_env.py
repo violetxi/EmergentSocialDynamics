@@ -104,10 +104,7 @@ class parallel_env(ParallelEnv):
         Returns the observations for each agent
         """
         self.steps = 0
-        self.agents = self.possible_agents[:]
-        if seed is not None:
-            self.seed = seed
-        self._env.seed(self.seed)
+        self.agents = self.possible_agents[:]                
         obs = self._env.reset()
         obs_out = {}
         info = {}

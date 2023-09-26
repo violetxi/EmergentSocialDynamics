@@ -37,6 +37,7 @@ class CleanupEnv(MapEnv):
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
+        seed=0,
         # @TODO: make this conditioned on eval_only in config
         track_individual_info=True, # this is true as we always try to track individual info during evaluation
     ):
@@ -50,6 +51,7 @@ class CleanupEnv(MapEnv):
             inequity_averse_reward=inequity_averse_reward,
             alpha=alpha,
             beta=beta,
+            seed_val=seed,
             track_individual_info=track_individual_info,
         )
 
@@ -140,8 +142,7 @@ class CleanupEnv(MapEnv):
             # use `_` for easy indexing in TianShou's Batch object
             agent_id = "agent_" + str(i)
             spawn_point = self.spawn_point()
-            rotation = self.spawn_rotation()            
-            print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
+            rotation = self.spawn_rotation()
             # grid = util.return_view(map_with_agents, spawn_point,
             #                         CLEANUP_VIEW_SIZE, CLEANUP_VIEW_SIZE)
             # agent = CleanupAgent(agent_id, spawn_point, rotation, grid)

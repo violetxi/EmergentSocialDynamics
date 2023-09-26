@@ -68,14 +68,7 @@ class TrainRunner:
         np.random.seed(seed)
         torch.manual_seed(seed)
         if self.args.exp_run.device == 'cuda':
-            torch.cuda.manual_seed(seed)
-        train_env_seeds = list(range(seed, seed + self.args.exp_run.train_env_num))
-        self.train_envs.seed(train_env_seeds)                
-        test_env_seeds = list(range(
-            seed + self.args.exp_run.train_env_num, 
-            seed + self.args.exp_run.train_env_num + self.args.exp_run.test_env_num
-            ))
-        self.test_envs.seed(test_env_seeds)     
+            torch.cuda.manual_seed(seed)            
 
     def _load_config(self) -> None:
         hydra_cfg = HydraConfig.get()
@@ -98,18 +91,39 @@ class TrainRunner:
             self.model_based = False
             self.im_policy = False
 
+    def _create_seed_env(
+            self,
+            seeds: List[int],
+            ) -> VectorEnv:
+        """For environment to be reproducible across runs, need to seed them 
+        during initialization."""
+        vec_envs = []
+        for seed in seeds:
+            self.env_config['base_env_kwargs']['seed'] = seed
+            env_config = deepcopy(self.env_config)
+            #vec_envs.append(lambda: get_env(env_config))
+            vec_envs.append(lambda config=env_config: get_env(config))
+        return VectorEnv(vec_envs)
+
     def _setup_env(self) -> None:        
-        # this is just a dummpy for setting up other things later
-        breakpoint()
+        # this is just a dummpy for setting up other things later        
+        seed = self.args.exp_run.seed
+        train_env_seeds = list(range(seed, seed + self.args.exp_run.train_env_num))        
+        test_env_seeds = list(range(
+            seed + self.args.exp_run.train_env_num, 
+            seed + self.args.exp_run.train_env_num + self.args.exp_run.test_env_num
+            ))
+        # trainer will use this to collect data
+        self.train_envs = self._create_seed_env(train_env_seeds)
+        print("Setting up testing environments...")        
+        self.test_envs = self._create_seed_env(test_env_seeds)
+        # this will be used getting information about the environment
         env = get_env(self.env_config)
         self.agent_ids = env.possible_agents
         self.action_space = env._env.action_space
         # these will be used for evaluation and plotting
         self.env_agents = env.possible_agents
-        self.agent_colors = env.get_agent_colors()
-        # trainer will use this to collect data        
-        self.train_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.exp_run.train_env_num)])
-        self.test_envs = VectorEnv([lambda : deepcopy(env) for i in range(self.args.exp_run.test_env_num)])
+        self.agent_colors = env.get_agent_colors()        
     
     def _setup_single_agent(self, agent_id) -> PPOPolicy:
         net_module = import_module(
@@ -398,14 +412,14 @@ class TrainRunner:
             pickle.dump(existing_data, f)
         print(f"data saved to {result_path}..")
         # save frames for video generation        
-        for i, run_frames in enumerate(episode_frames):            
-            video_folder = os.path.join(
-                args.exp_run.result_dir, 
-                "frames", 
-                f"{model_name}_ep{i}"
-                )
-            ensure_dir(video_folder)
-            self.save_behavior_vis(run_frames, data[i], video_folder)
+        # for i, run_frames in enumerate(episode_frames):            
+        #     video_folder = os.path.join(
+        #         args.exp_run.result_dir, 
+        #         "frames", 
+        #         f"{model_name}_ep{i}"
+        #         )
+        #     ensure_dir(video_folder)
+        #     self.save_behavior_vis(run_frames, data[i], video_folder)
 
     # Combine frames and reward curve horizontally
     def save_behavior_vis(

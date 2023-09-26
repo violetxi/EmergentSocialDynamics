@@ -227,6 +227,8 @@ class VectorEnv(BaseVectorEnv):
             return self._obs[id], self._rew[id], self._terminated[id], \
                 self._truncated[id], self._info[id]
 
+    # this doesn't correctly seed the base envs, instead we seed each base 
+    # env at its initialization call
     def seed(self, seed: Optional[Union[int, List[int]]] = None) -> None:        
         if np.isscalar(seed):
             seed = [seed + _ for _ in range(self.env_num)]

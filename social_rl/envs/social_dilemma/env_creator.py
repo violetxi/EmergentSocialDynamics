@@ -9,6 +9,7 @@ def get_env_creator(
     inequity_averse_reward=False,
     alpha=0.0,
     beta=0.0,
+    seed=0
 ):
     if env == "harvest":
         return HarvestEnv(
@@ -18,6 +19,7 @@ def get_env_creator(
             inequity_averse_reward=inequity_averse_reward,
             alpha=alpha,
             beta=beta,
+            seed=seed,
         )
 
     elif env == "cleanup":    
@@ -28,6 +30,7 @@ def get_env_creator(
             inequity_averse_reward=inequity_averse_reward,
             alpha=alpha,
             beta=beta,
+            seed=seed,
         )
 
     else:

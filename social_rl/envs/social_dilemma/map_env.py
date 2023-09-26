@@ -71,7 +71,7 @@ class MapEnv:
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
-        seed=0,
+        seed_val=0,
         # @TODO: should only be true for cleanup
         track_individual_info=True,
     ):
@@ -90,8 +90,7 @@ class MapEnv:
         return_agent_actions: bool
             If true, the observation space will include the actions of other agents
         """
-        print("MapEnv init")
-        self.seed(seed)
+        self.seed(seed_val)
         self.num_agents = num_agents
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
@@ -279,7 +278,7 @@ class MapEnv:
             pos = agent.pos
             new_char = agent.consume(self.world_map[pos[0], pos[1]])
             """agent behavior tracking: apple eaten"""
-            if self.world_map[pos[0], pos[1]] == b"A" and new_char == b" ":
+            if self.track_individual_info and self.world_map[pos[0], pos[1]] == b"A" and new_char == b" ":
                 self.agent_behavior[agent.agent_id]['apple_eaten'] += 1
             self.single_update_map(pos[0], pos[1], new_char)
 
@@ -353,7 +352,6 @@ class MapEnv:
             the initial observation of the space. The initial reward is assumed
             to be zero.
         """
-        print("resetting")
         self.beam_pos = []
         self.agents = {}        
         self.setup_agents()
@@ -387,8 +385,8 @@ class MapEnv:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr}
         return observations
 
-    def seed(self, seed):
-        np.random.seed(seed)
+    def seed(self, s):
+        np.random.seed(s)
 
     def close(self):
         plt.close()
@@ -554,7 +552,7 @@ class MapEnv:
                 pos = agent.pos + self.rotate_action(self.all_actions[move_action], agent.get_orientation())
                 if self.world_map[pos[0], pos[1]] == b"A":
                     apple_actions.append(move_action)
-            if len(apple_actions) > 0 and action not in apple_actions:
+            if self.track_individual_info and len(apple_actions) > 0 and action not in apple_actions:
                 self.agent_behavior[agent_id]["not_eating_low_hanging_apple"] += 1
 
             # TODO(ev) these two parts of the actions            
@@ -566,7 +564,7 @@ class MapEnv:
                 new_pos = agent.return_valid_pos(new_pos)
                 reserved_slots.append((*new_pos, b"P", agent_id))
                 """Tracking agent behaviors: making invalid move"""
-                if np.all(new_pos == agent.pos) and "MOVE" in action:
+                if self.track_individual_info and np.all(new_pos == agent.pos) and "MOVE" in action:
                     self.agent_behavior[agent_id]["invalid_action"] += 1
 
             elif "TURN" in action:
