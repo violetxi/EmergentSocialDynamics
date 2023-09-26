@@ -16,22 +16,20 @@ def test_env_render(env_name):
         alpha=0.0,
         beta=0.0
     )
+    print(f"In environment {env_name}")
     env = parallel_env(env_args, render_mode="rgb_array")
     env.reset(seed=0)
     n_steps = 300
     # save frames
     frame_folder = os.path.join("tests", env_name)
     os.makedirs(frame_folder, exist_ok=True)
-    dpi_val = 300
+    dpi_val = 300    
     for step in range(n_steps):
         actions = [
             env._env.action_space.sample() for agent_id in env.possible_agents
             ]        
         obs, rewards, done, truncations, info = env.step(actions)
-        frame = env.render()
-        print(f"environment step {step} rewards: {rewards}")
-        if step == 0:
-            print(f"environment {env_name} frame shape: {frame.shape}")
+        frame = env.render()        
         h, w, _ = frame.shape
         h = h * 30
         w = w * 30
@@ -50,5 +48,5 @@ def test_env_render(env_name):
 
 
 if __name__ == "__main__":
-    #test_env_render("harvest")
     test_env_render("cleanup")
+    test_env_render("harvest")    

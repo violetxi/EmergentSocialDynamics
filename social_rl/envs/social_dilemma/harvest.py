@@ -26,7 +26,8 @@ class HarvestEnv(MapEnv):
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
-        track_individual_info=False,
+        seed=0,
+        track_individual_info=False,        
     ):
         super().__init__(
             ascii_map,
@@ -38,6 +39,7 @@ class HarvestEnv(MapEnv):
             inequity_averse_reward=inequity_averse_reward,
             alpha=alpha,
             beta=beta,
+            track_individual_info=track_individual_info,
         )
         self.apple_points = []
         for row in range(self.base_map.shape[0]):
@@ -56,7 +58,7 @@ class HarvestEnv(MapEnv):
             agent_id = "agent_" + str(i)
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()
-            #print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
+            print(f"agent {agent_id} spawned at {spawn_point} facing {rotation}")
             grid = map_with_agents
             agent = HarvestAgent(agent_id, spawn_point, rotation, grid, view_len=HARVEST_VIEW_SIZE)
             self.agents[agent_id] = agent

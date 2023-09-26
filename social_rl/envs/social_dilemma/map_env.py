@@ -4,6 +4,7 @@
 from copy import deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
+#np.random.seed(0)
 from gym.spaces import Box, Dict
 
 
@@ -70,6 +71,7 @@ class MapEnv:
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
+        seed=0,
         # @TODO: should only be true for cleanup
         track_individual_info=True,
     ):
@@ -88,6 +90,8 @@ class MapEnv:
         return_agent_actions: bool
             If true, the observation space will include the actions of other agents
         """
+        print("MapEnv init")
+        self.seed(seed)
         self.num_agents = num_agents
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
@@ -98,6 +102,7 @@ class MapEnv:
         self.alpha = alpha
         self.beta = beta
         self.track_individual_info = track_individual_info
+        # @TODO: should only be true for cleanup        
         self.all_actions = _MAP_ENV_ACTIONS.copy()
         self.all_actions.update(extra_actions)
         # Map without agents or beams
@@ -131,6 +136,7 @@ class MapEnv:
         # to track of agent's behavior pattern through out an episode
         if self.track_individual_info:
             self.setup_agent_behavior_tracker()
+        
 
     def setup_agent_behavior_tracker(self):        
         self.agent_behavior = {}
@@ -345,9 +351,10 @@ class MapEnv:
         observation: dict of numpy ndarray
             the initial observation of the space. The initial reward is assumed
             to be zero.
-        """        
+        """
+        print("resetting")
         self.beam_pos = []
-        self.agents = {}
+        self.agents = {}        
         self.setup_agents()
         self.reset_map()
         self.custom_map_update()

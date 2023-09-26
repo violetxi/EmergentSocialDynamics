@@ -46,6 +46,7 @@ class parallel_env(ParallelEnv):
         if self.stack_num > 1:            
             self.observation_history = deque(maxlen=self.stack_num - 1)
         self.steps = 0
+        # @TODO seeding properly        
 
     # Observation space should be defined here.
     # lru_cache allows observation and action spaces to be memoized, reducing clock cycles required to get each agent's space.

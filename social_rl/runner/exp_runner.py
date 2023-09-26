@@ -100,6 +100,7 @@ class TrainRunner:
 
     def _setup_env(self) -> None:        
         # this is just a dummpy for setting up other things later
+        breakpoint()
         env = get_env(self.env_config)
         self.agent_ids = env.possible_agents
         self.action_space = env._env.action_space
