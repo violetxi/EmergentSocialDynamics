@@ -34,6 +34,9 @@ from social_rl.tianshou_elign.env.vecenv import VectorEnv
 from social_rl.tianshou_elign.trainer.onpolicy import onpolicy_trainer
 from social_rl.envs.social_dilemma.pettingzoo_env import parallel_env
 from social_rl.policy.multi_agent_policy_manager import MultiAgentPolicyManager
+from social_rl.policy.mappo import MAPPOPolicy
+from social_rl.policy.multi_agent_policy_sharing_parameters_manager import \
+    MultiAgentPolicySharingParametersManager
 from social_rl.utils.loggers.wandb_logger import WandbLogger
 from social_rl.utils.utils import ensure_dir
 
@@ -79,7 +82,7 @@ class TrainRunner:
         # configuration for environment and agents
         self.config = OmegaConf.to_container(self.args, resolve=True)
         self.env_config = self.config['environment']        
-        self.net_config = self.config['model']['net']
+        self.net_config = self.config['model']['net']        
         self.policy_config = self.config['model']['PPOPolicy']
         if 'IMPolicy' in self.config['model']:            
             self.impolicy_config = self.config['model']['IMPolicy']
@@ -218,25 +221,46 @@ class TrainRunner:
                     ).cuda()
         else:
             # model free non-IM policy        
-            policy = PPOPolicy(
-                actor=actor,
-                critic=critic,
-                optim=optim,
-                dist_fn=dist,
-                **self.policy_config
-            ).cuda()
+            if self.config['model']['name'] == 'mappo':
+                policy = MAPPOPolicy(
+                    actor=actor,
+                    critic=critic,
+                    optim=optim,
+                    dist_fn=dist,
+                    **self.policy_config
+                ).cuda()
+            else:
+                # individual PPO             
+                policy = PPOPolicy(
+                    actor=actor,
+                    critic=critic,
+                    optim=optim,
+                    dist_fn=dist,
+                    **self.policy_config
+                ).cuda()
 
         return policy
 
     def _setup_agents(self) -> None:
         all_agents = {}
-        for agent in self.env_agents:
-            all_agents[agent] = self._setup_single_agent(agent)
-        self.policy = MultiAgentPolicyManager(
-            list(all_agents.values()), 
-            self.env_agents,
-            self.action_space
-            )
+        if self.config['model']['name'] == 'mappo':
+            # in MAPPO, all agents share the same policy
+            agent_policy = self._setup_single_agent(self.env_agents[0])
+            for agent_id in self.env_agents:
+                all_agents[agent_id] = agent_policy
+            self.policy = MultiAgentPolicySharingParametersManager(
+                list(all_agents.values()),
+                self.env_agents,
+                self.action_space
+                )
+        else:
+            for agent_id in self.env_agents:
+                all_agents[agent_id] = self._setup_single_agent(agent_id)
+            self.policy = MultiAgentPolicyManager(
+                list(all_agents.values()), 
+                self.env_agents,
+                self.action_space
+                )
         
     def preprocess_fn(self, obs):
         """Preprocess observation in image format to tensor format
@@ -246,12 +270,19 @@ class TrainRunner:
         transform = Compose([ToPILImage(), Grayscale(), ToTensor(),])        
         for i, env_ob in enumerate(obs):
             for agent_id, agent_ob in env_ob.items():
-                ob = agent_ob['observation']['curr_obs']
+                ob = agent_ob['observation']['curr_obs']                
                 if len(ob.shape) == 3:
                     processed_ob = transform(ob).unsqueeze(0)
                 else:
                     processed_ob = torch.stack([transform(ob_i) for ob_i in ob])
-                agent_ob['observation']['curr_obs'] = processed_ob.pin_memory()             
+                agent_ob['observation']['curr_obs'] = processed_ob.pin_memory()
+                                        
+                cent_obs = agent_ob['observation']['cent_obs']
+                if len(ob.shape) == 3:
+                    processed_cent_obs = transform(cent_obs).unsqueeze(0)
+                else:
+                    processed_cent_obs = torch.stack([transform(cent_obs) for cent_obs in cent_obs])
+                agent_ob['observation']['cent_obs'] = processed_cent_obs.pin_memory()
         return obs
 
     def _setup_collectors(self) -> None:

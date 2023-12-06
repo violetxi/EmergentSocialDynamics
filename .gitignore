@@ -174,3 +174,4 @@ backup/
 .vscode/
 # hydra output
 outputs/
+tests/

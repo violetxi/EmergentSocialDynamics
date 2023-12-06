@@ -36,7 +36,7 @@ def test_env_render(env_name):
         fig_size_width = w / dpi_val
         fig_size_height = h / dpi_val
         frame_resize = cv2.resize(frame.astype(np.uint8), (w, h), interpolation=cv2.INTER_AREA)
-        filename = os.path.join(frame_folder, f'{step}.jpg')
+        filename = os.path.join(frame_folder, f'{step}.png')
         cv2.imwrite(filename, frame_resize)
         # plt.figure(figsize=(fig_size_width, fig_size_height), dpi=dpi_val)
         # plt.imshow(frame_resize)

@@ -317,7 +317,7 @@ class Collector(object):
                 else:
                     result = self.policy(self.data, last_state)
                 # update state / policy into self.data
-                policy = result.get("policy", Batch())                
+                policy = result.get("policy", Batch())                 
                 assert isinstance(policy, Batch)
                 state = result.get("state", None)
                 if state is not None:
@@ -333,9 +333,9 @@ class Collector(object):
                 self.data.update(policy=policy, act=act)
 
             # get bounded and remapped actions first (not saved into buffer)
-            # only processed if self.action_scaling it True
+            # only processed if self.action_scaling it True            
             action_remap = self.policy.map_action(self.data.act)
-            # step in env, output shape: (num_ep, num_agents)            
+            # step in env, output shape: (num_ep, num_agents)             
             obs_next, rew, terminated, truncated, info = self.env.step(
                 action_remap,  # type: ignore
                 ready_env_ids

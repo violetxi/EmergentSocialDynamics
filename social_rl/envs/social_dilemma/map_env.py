@@ -150,12 +150,18 @@ class MapEnv:
             self.agent_behavior[agent_id] = deepcopy(self.behavior_dict)
         
     @property
-    def observation_space(self):
+    def observation_space(self):        
         obs_space = {
             "curr_obs": Box(
                 low=0,
                 high=255,
                 shape=(2 * self.view_len + 1, 2 * self.view_len + 1, 3),
+                dtype=np.uint8,
+            ),
+            "cent_obs": Box(
+                low=0,
+                high=255,
+                shape=(self.base_map.shape[0], self.base_map.shape[1], 3),
                 dtype=np.uint8,
             )
         }
@@ -298,17 +304,20 @@ class MapEnv:
         rewards = {}
         dones = {}
         infos = {}
-        for agent in self.agents.values():
+        # add global obs for centralized critic
+        cent_obs = self.full_map_to_colors().astype('uint8')
+        for agent in self.agents.values():            
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
             # concatenate on the prev_actions to the observations
             if self.return_agent_actions:
                 prev_actions = np.array(
                     [actions[key] for key in sorted(actions.keys()) if key != agent.agent_id]
-                ).astype(np.uint8)
+                ).astype(np.uint8)                
                 self_action = np.array([actions[agent.agent_id]]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
+                    "cent_obs": cent_obs,
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
                     "self_actions": self_action,
@@ -366,6 +375,7 @@ class MapEnv:
         map_with_agents = self.get_map_with_agents()
 
         observations = {}
+        cent_obs = self.full_map_to_colors().astype('uint8')
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
@@ -376,6 +386,7 @@ class MapEnv:
                 self_action = np.array([4]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
+                    "cent_obs": cent_obs,
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
                     "self_actions": self_action,
