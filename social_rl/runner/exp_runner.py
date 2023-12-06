@@ -222,6 +222,20 @@ class TrainRunner:
         else:
             # model free non-IM policy        
             if self.config['model']['name'] == 'mappo':
+                critic_net = feature_net_cls(self.config['model']['critic_net'])
+                device = self.args.exp_run.device
+                action_shape = self.action_space.n                
+                critic = Critic(critic_net, device=device)
+                actor_critic = ActorCritic(actor, critic)
+                # orthogonal initialization
+                for m in actor_critic.modules():
+                    if isinstance(m, torch.nn.Linear):
+                        torch.nn.init.orthogonal_(m.weight)
+                        torch.nn.init.zeros_(m.bias)
+                optim = torch.optim.Adam(
+                    actor_critic.parameters(), 
+                    lr=self.args.agent.optim.ppo_lr
+                    )
                 policy = MAPPOPolicy(
                     actor=actor,
                     critic=critic,

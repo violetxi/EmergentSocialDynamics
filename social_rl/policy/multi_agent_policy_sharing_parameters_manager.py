@@ -237,9 +237,7 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
         # reset hidden states for each state
         self.reset_hidden_state()
         for agent_id, policy in self.policies.items():            
-            data = batch[agent_id]
-            result = policy(data, state=None, **kwargs)
-            breakpoint()
+            data = batch[agent_id]                    
             if not data.is_empty():      
                 out = policy.learn(batch=data, **kwargs)
                 for k, v in out.items():

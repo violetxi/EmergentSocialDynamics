@@ -78,19 +78,19 @@ class ConvGRU(nn.Module):
         self.state = None
 
     def encode(self, x):
-        x = self.conv(x)
-        x = self.conv2gru(x)
+        x = self.conv(x)        
+        x = self.conv2gru(x)                        
         return x
 
     def forward(self, obs, state=None):
         # state is the initial hidden state
         obs = obs.observation.curr_obs.cuda(non_blocking=True)    
         # stacked inputs assuming images are grayscaled        
-        bs, ts, c, h, w = obs.shape
+        bs, ts, c, h, w = obs.shape        
         processed_obs = []
         for i in range(ts):
-            processed_obs.append(self.encode(obs[:, i, :, :, :]))
-        processed_obs = torch.stack(processed_obs).permute(1, 0, 2)
+            processed_obs.append(self.encode(obs[:, i, :, :, :]))        
+        processed_obs = torch.stack(processed_obs).permute(1, 0, 2)        
         # during batch training, uses reset state every time
         if bs > 50:
             if state is None:
