@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
+from copy import deepcopy
 
 import gym
 import numpy as np
@@ -219,27 +220,15 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
 
     def learn(self, batch: Batch,
               **kwargs: Any) -> Dict[str, Union[float, List[float]]]:
-        """Dispatch the data to all policies for learning.
-
-        :return: a dict with the following contents:
-
-        ::
-
-            {
-                "agent_1/item1": item 1 of agent_1's policy.learn output
-                "agent_1/item2": item 2 of agent_1's policy.learn output
-                "agent_2/xxx": xxx
-                ...
-                "agent_n/xxx": xxx
-            }
+        """Aggregate all agents trajectories and learn from them..
         """
         results = {}
         # reset hidden states for each state
         self.reset_hidden_state()
-        for agent_id, policy in self.policies.items():            
-            data = batch[agent_id]                    
-            if not data.is_empty():      
-                out = policy.learn(batch=data, **kwargs)
-                for k, v in out.items():
-                    results[agent_id + "/" + k] = v
+        # create a batch with all agents' trajectories to train a single policy
+        policy = self.policies[self.env_agents[0]]
+        shared_batch_list = [agent_batch for agent_id, agent_batch in batch.items()]
+        shared_batch = Batch.cat(shared_batch_list)
+        if not shared_batch.is_empty():
+            results = policy.learn(shared_batch, **kwargs)                    
         return results
