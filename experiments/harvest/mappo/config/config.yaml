@@ -8,7 +8,7 @@ exp_run:
   buffer_size: 20_000
   # number of train and test envs in the vectorized environment
   train_env_num: 10
-  test_env_num: 1
+  test_env_num: 2
   device: 'cuda'
   # ckpt_dir can be provided when continue to train or only doing evaluation
   ckpt_dir: null
@@ -53,7 +53,7 @@ model:
   name: mappo
   net:
     module_path: 'social_rl.model.core'
-    class_name: 'ConvGRU'
+    class_name: 'ConvGRUMAPPO'
     in_channels: 1
     out_channels: 6
     kernel_size: 3
@@ -71,7 +71,7 @@ model:
     output_dim: 64
   critic_net:
     module_path: 'social_rl.model.core'
-    class_name: 'ConvGRU'
+    class_name: 'ConvGRUMAPPOCritic'
     in_channels: 1
     out_channels: 6
     kernel_size: 3
@@ -101,6 +101,6 @@ model:
     dual_clip: null
     value_clip: 0
     deterministic_eval: True
-    advantage_normalization: 0
+    advantage_normalization: 1
     recompute_advantage: 0
 

@@ -101,6 +101,6 @@ model:
     dual_clip: null
     value_clip: 0
     deterministic_eval: True
-    advantage_normalization: 0
+    advantage_normalization: 1
     recompute_advantage: 0
 

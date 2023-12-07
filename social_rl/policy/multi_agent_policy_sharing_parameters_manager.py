@@ -59,24 +59,8 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
         self, batch: Batch, buffer: ReplayBuffer, indice: np.ndarray
     ) -> Batch:
         """Dispatch batch data from obs.agent_id to every policy's process_fn.
-        :param batch: a Batch of data with the following keys, keys without data
-            will has an empty Batch() as value:
-            - 'obs': {agent_id: nested_obs_dict},
-            - 'obs_next': {agent_id: nested_obs_dict},
-            - 'rew': (batch_size, num_agents),
-            - 'act': (batch_size, num_agents),
-            - 'done': (batch_size, 1), one for each episode (true when all agents are done)
-            - 'terminated': (batch_size, 1), one for each episode (true when any agent is done)
-            - 'truncated': (batch_size, 1), one for each episode (true when any agent is done)            
-            - 'policy': @TODO this is not used yet
-            - 'info': {agent_id: {}}, @TODO if info is not empty, it should be a nested dict 
-        :param buffer: a ReplayBuffer to store data.
-        :param indice: the indices of samples which are selected from buffer. **Note: because our 
-            buffer is a multi-agent buffer which stores item in the same index as nested data structure 
-            like np.ndarray or dictionary, which are used agent_id or agent_idx to identify. TianShou's 
-            indice is expecting global index in the Batch object, therefore in our case they just use all 
-            the indices in a batch.**
-        """        
+        Ensure every thing starts with (bs, n_agents, ...) shape.
+        """
         # reward can be empty Batch (after initial reset) or nparray.
         has_rew = isinstance(buffer.rew, np.ndarray)        
         if has_rew:  # save the original reward in save_rew
@@ -84,35 +68,29 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
             # change buffer.rew, otherwise buffer.rew = Batch() has no effect.
             save_rew, buffer._meta.rew = buffer.rew, Batch()
         
-        output = Batch()
-        results = {}
-        agent_ids = self.env_agents
-        for agent_id, policy in self.policies.items():
-            output[agent_id] = Batch()         
-            tmp_batch_dict = {}
-            agent_idx = agent_ids.index(agent_id)        
-            for k, v in batch.items():
-                if v is None:
-                    tmp_batch_dict[k] = Batch()                    
+        tmp_batch_dict = {}
+        results = {}        
+        for k, v in batch.items():
+            if isinstance(v, Batch) and v.is_empty():
+                # for keys with no data populated, we use empty Batch()
+                tmp_batch_dict[k] = v
+            else:
+                if isinstance(v, Batch):
+                    # stack all the observations
+                    v_list = [v.get(agent_id) for agent_id in self.env_agents]                    
+                    tmp_batch_dict[k] = Batch.stack(v_list, axis=1)
                 else:
-                    if k in ['obs', 'obs_next']:
-                        tmp_batch_dict[k] = v.get(agent_id)
-                    else:          
-                        if k in ['done', 'terminated', 'truncated', 'info', 'policy']:
-                            tmp_batch_dict[k] = v
-                        else:                 
-                            tmp_batch_dict[k] = v[:, agent_idx]
-
-            # @TODO currently we don't support hidden state, will update later
-            #state = None
-            tmp_batch = Batch(tmp_batch_dict)
-            # all indicies should be for current agennt
-            tmp_indice = np.arange(len(tmp_batch.obs))            
-            results[agent_id] = policy.process_fn(tmp_batch, buffer, tmp_indice)
+                    tmp_batch_dict[k] = v
+        
+        tmp_batch = Batch(tmp_batch_dict)
+        # all indicies should be for one agennt (bs)
+        tmp_indice = np.arange(tmp_batch.obs.shape[0])
+        results = self.policies[self.env_agents[0]].process_fn(tmp_batch, buffer, tmp_indice)        
         
         if has_rew:  # restore from save_rew
             buffer._meta.rew = save_rew
-        return Batch(results)
+        # return Batch(results)
+        return results
 
 
     def exploration_noise(
@@ -128,6 +106,7 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
                 act[:, agent_idx], batch
             )
         return act
+
 
     def forward(  # type: ignore
         self,
@@ -145,10 +124,10 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
                 # for keys with no data populated, we use empty Batch()
                 tmp_batch_dict[k] = v
             else:
-                if isinstance(v, Batch):
-                    # stack all the observations
+                if isinstance(v, Batch):                    
                     v_list = [v.get(agent_id) for agent_id in agent_ids]
-                    tmp_batch_dict[k] = Batch.stack(v_list)                
+                    #tmp_batch_dict[k] = Batch.stack(v_list)               
+                    tmp_batch_dict[k] = Batch.stack(v_list, axis=1)
         tmp_batch = Batch(tmp_batch_dict)
         policy = self.policies[agent_ids[0]]
         out = policy(
@@ -169,6 +148,7 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
         holder = Batch(results)
         return holder
 
+
     def learn(self, batch: Batch,
               **kwargs: Any) -> Dict[str, Union[float, List[float]]]:
         """Aggregate all agents trajectories and learn from them..
@@ -177,9 +157,8 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
         # reset hidden states for each state
         self.reset_hidden_state()
         # create a batch with all agents' trajectories to train a single policy
-        policy = self.policies[self.env_agents[0]]
-        shared_batch_list = [agent_batch for agent_id, agent_batch in batch.items()]        
-        shared_batch = Batch.cat(shared_batch_list)
-        if not shared_batch.is_empty():
-            results = policy.learn(shared_batch, **kwargs)                    
+        policy = self.policies[self.env_agents[0]]        
+        
+        if not batch.is_empty():
+            results = policy.learn(batch, **kwargs)                    
         return results

@@ -180,8 +180,8 @@ class ConvGRUMAPPO(nn.Module):
 
     def forward(self, obs, state=None):        
         # state is the initial hidden state
-        obs = obs.observation.curr_obs.cuda(non_blocking=True)               
-        n_agents, bs, ts, c, h, w = obs.shape
+        obs = obs.observation.curr_obs.cuda(non_blocking=True)             
+        bs, n_agents, ts, c, h, w = obs.shape
         obs = obs.reshape(n_agents * bs, ts, c, h, w)
         processed_obs = []
         for i in range(ts):
@@ -189,7 +189,7 @@ class ConvGRUMAPPO(nn.Module):
         # (bs * n_agents, ts, rnn_input_size)
         processed_obs = torch.stack(processed_obs).permute(1, 0, 2)
         # (n_agents, bs, ts, rnn_input_size)
-        processed_obs = processed_obs.reshape(n_agents, bs, ts, -1)             
+        processed_obs = processed_obs.reshape(bs, n_agents, ts, -1)             
         logits_out = []
 
         if bs > 50:
@@ -199,11 +199,10 @@ class ConvGRUMAPPO(nn.Module):
                     torch.zeros((self.gru.num_layers, bs, self.gru.hidden_size)).cuda() for _ in range(n_agents)                    
                 ]
             for i in range(n_agents):
-                out, state[i] = self.gru(processed_obs[i], state[i])
+                out, state[i] = self.gru(processed_obs[:, i, :, :], state[i])
                 last_out = out[:, -1, :]
                 logits = self.fc(last_out)
-                logits_out.append(logits)
-            
+                logits_out.append(logits)            
         else:
             # during data collection, use state with past history            
             if self.state is None:           
@@ -211,12 +210,12 @@ class ConvGRUMAPPO(nn.Module):
                     torch.zeros((self.gru.num_layers, bs, self.gru.hidden_size)).cuda() for _ in range(n_agents)
                     ]
             for i in range(n_agents):
-                out, self.state[i] = self.gru(processed_obs[i], self.state[i])
+                out, self.state[i] = self.gru(processed_obs[:, i, :, :], self.state[i])
                 last_out = out[:, -1, :]
                 logits = self.fc(last_out)
                 logits_out.append(logits)        
-        logits_out = torch.stack(logits_out).reshape(n_agents * bs, self.output_dim, 1)
-        return logits_out, torch.stack(self.state)
+        logits_out = torch.stack(logits_out).reshape(n_agents * bs, self.output_dim, 1)                              
+        return logits_out, torch.stack(self.state) if self.state else state
     
 
 
@@ -256,8 +255,9 @@ class ConvGRUMAPPOCritic(nn.Module):
 
     def forward(self, obs, state=None):        
         # state is the initial hidden state
-        obs = obs.observation.curr_obs.cuda(non_blocking=True)               
-        bs, ts, c, h, w = obs.shape        
+        obs = obs.observation.curr_obs.cuda(non_blocking=True)                 
+        bs, ts, c, h, w = obs.shape
+
         processed_obs = []
         for i in range(ts):
             processed_obs.append(self.encode(obs[:, i, :, :, :]))        
