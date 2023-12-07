@@ -41,20 +41,19 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
 
         self.policies = dict(zip(self.env_agents, policies))
 
+
     def replace_policy(self, policy: BasePolicy, agent_id: int) -> None:
         """Replace the "agent_id"th policy in this manager."""
         policy.set_agent_id(agent_id)
         self.policies[agent_id] = policy
 
+
     def reset_hidden_state(self) -> None:
         """Reset the hidden state of each policy."""
-        for agent_id, policy in self.policies.items():
-            if hasattr(policy, "actor"):                
-                # PPO base policy 
-                policy.actor.preprocess.state = None        
-            else:
-                # other IM policies wrapped PPO
-                policy.policy.actor.preprocess.state = None
+        policy = self.policies[self.env_agents[0]]
+        policy.critic.preprocess.state = None
+        policy.actor.preprocess.state = None
+
 
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indice: np.ndarray
@@ -115,6 +114,7 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
             buffer._meta.rew = save_rew
         return Batch(results)
 
+
     def exploration_noise(
             self, 
             act: Union[np.ndarray, Batch],
@@ -135,86 +135,37 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
         state: Optional[Union[dict, Batch]] = None,
         **kwargs: Any,
     ) -> Batch:
-        """Dispatch batch data from obs.agent_id to every policy's forward for decentralized 
-        execution.
-
-        :param batch: a Batch of data with the following keys, keys without data
-            will has an empty Batch() as value:
-            - 'obs': {agent_id: nested_obs_dict},
-            - 'obs_next': {agent_id: nested_obs_dict},
-            - 'rew': (batch_size, num_agents),
-            - 'act': (batch_size, num_agents),
-            - 'done': (batch_size, 1), one for each episode (true when all agents are done)
-            - 'terminated': (batch_size, 1), one for each episode (true when any agent is done)
-            - 'truncated': (batch_size, 1), one for each episode (true when any agent is done)            
-            - 'policy': @TODO this is not implemented yet
-            - 'info': {agent_id: {}}, @TODO if info is not empty, it should be a nested dict            
-        :param state: if None, it means all agents have no state. If not
-            None, it should contain keys of "agent_1", "agent_2", ...
-
-        :return: a Batch with the following contents:
-
-        ::
-
-            {
-                "act": (batch_size, )
-                }
-                "state": {
-                    "agent_1": output state of agent_1's policy for the state
-                    "agent_2": xxx
-                    ...
-                    "agent_n": xxx}
-                "out": {
-                    "agent_1": output of agent_1's policy for the input
-                    "agent_2": xxx
-                    ...
-                    "agent_n": xxx}
-            }
-        """
-        # results: List[Tuple[bool, np.ndarray, Batch, Union[np.ndarray, Batch],
-        #                     Batch]] = []        
+        """Organize batch data for decentralized execution using a shared policy.
+        """      
         results = {}
+        tmp_batch_dict = {}
         agent_ids = self.env_agents        
-        for agent_id, policy in self.policies.items():
-            tmp_batch_dict = {}
-            agent_idx = agent_ids.index(agent_id)            
-            for k, v in batch.items():
-                if isinstance(v, Batch) and v.is_empty():
-                    # for keys with no data populated, we use empty Batch()
-                    tmp_batch_dict[k] = v
-                else:
-                    if k in ['obs', 'obs_next']:
-                        tmp_batch_dict[k] = v.get(agent_id)
-                        # add other agent's reward to the batch
-                        if policy.__class__.__name__ == 'SVOPolicy':
-                            if len(batch.rew.shape) > 0:
-                                other_rews = np.hstack((
-                                    batch['rew'][:, :agent_idx], 
-                                    batch['rew'][:, agent_idx+1:]
-                                    ))
-                                tmp_batch_dict[k]['observation']['other_rews'] = other_rews
-                    else:
-                        if k in ['done', 'terminated', 'truncated', 'info', 'policy']:
-                            tmp_batch_dict[k] = v
-                        else:                                                                                    
-                            tmp_batch_dict[k] = v[:, agent_idx]
-
-            tmp_batch = Batch(tmp_batch_dict)
-            out = policy(
-                batch=tmp_batch,
-                state=None, # we keep track of state in actor network
-                **kwargs
-            )
-            act = out.act
-            each_state = out.state \
-                if (hasattr(out, "state") and out.state is not None) \
-                else Batch()
-            results[agent_id] = {
-                'out': out.logits,  # shape (B, ...) or (N_env, ...)
-                'act': act,  # shape (B, ) or (N_env, )
-                'state': each_state    # shape (B, ...) or (N_env, ...)
-            }
+        for k, v in batch.items():
+            if isinstance(v, Batch) and v.is_empty():
+                # for keys with no data populated, we use empty Batch()
+                tmp_batch_dict[k] = v
+            else:
+                if isinstance(v, Batch):
+                    # stack all the observations
+                    v_list = [v.get(agent_id) for agent_id in agent_ids]
+                    tmp_batch_dict[k] = Batch.stack(v_list)                
+        tmp_batch = Batch(tmp_batch_dict)
+        policy = self.policies[agent_ids[0]]
+        out = policy(
+            batch=tmp_batch,
+            state=None, # we keep track of state in actor network
+            **kwargs
+        )
         
+        n_agents, _, bs, _ = out.state.shape        
+        out.act = out.act.reshape(n_agents, bs)        
+        for agent_id in agent_ids:
+            agent_idx = agent_ids.index(agent_id)
+            results[agent_id] = {
+                'out': out.logits[agent_idx, :],
+                'act': out.act[agent_idx, :],
+                'state': out.state[agent_idx, :]
+            }        
         holder = Batch(results)
         return holder
 
@@ -227,7 +178,7 @@ class MultiAgentPolicySharingParametersManager(BasePolicy):
         self.reset_hidden_state()
         # create a batch with all agents' trajectories to train a single policy
         policy = self.policies[self.env_agents[0]]
-        shared_batch_list = [agent_batch for agent_id, agent_batch in batch.items()]
+        shared_batch_list = [agent_batch for agent_id, agent_batch in batch.items()]        
         shared_batch = Batch.cat(shared_batch_list)
         if not shared_batch.is_empty():
             results = policy.learn(shared_batch, **kwargs)                    

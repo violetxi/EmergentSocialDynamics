@@ -222,7 +222,11 @@ class TrainRunner:
         else:
             # model free non-IM policy        
             if self.config['model']['name'] == 'mappo':
-                critic_net = feature_net_cls(self.config['model']['critic_net'])
+                critic_feat_net_cls = getattr(
+                    net_module, 
+                    self.config['model']['critic_net']['class_name']
+                    )                
+                critic_net = critic_feat_net_cls(self.config['model']['critic_net'])
                 device = self.args.exp_run.device
                 action_shape = self.action_space.n                
                 critic = Critic(critic_net, device=device)

@@ -389,8 +389,9 @@ class BaseTrainer(ABC):
             test_stat = {}
         
         if self.early_stop:
-            # if no improvement after 25 epochs, stop training
-            if self.epoch - self.best_epoch > 25:
+            # if no improvement after 25 epochs, stop training (all non MAPPO)
+            # @TODO: change this to 45 for MAPPO
+            if self.epoch - self.best_epoch > 45: #25:
                 stop_fn_flag = True
             # if best reward is negative after 100 epochs, stop training
             if self.epoch > 100 and self.best_reward < 0:
